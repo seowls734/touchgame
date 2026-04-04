@@ -271,9 +271,11 @@ document.body.appendChild(renderer.domElement);
 // Lights
 const amb=new THREE.AmbientLight(0x606878,2.2); scene.add(amb);
 const dirL=new THREE.DirectionalLight(0xffffff,1.8);
-dirL.position.set(20,35,10); dirL.castShadow=true; dirL.shadow.mapSize.set(2048,2048); scene.add(dirL);
-const pl1=new THREE.PointLight(0x3366ff,12,100,2); pl1.position.set(55,8,-20); scene.add(pl1);
-const pl2=new THREE.PointLight(0xff4422,12,100,2); pl2.position.set(-45,8,35); scene.add(pl2);
+dirL.position.set(40,60,20); dirL.castShadow=true; dirL.shadow.mapSize.set(2048,2048);
+dirL.shadow.camera.left=-200;dirL.shadow.camera.right=200;dirL.shadow.camera.top=200;dirL.shadow.camera.bottom=-200;
+scene.add(dirL);
+const pl1=new THREE.PointLight(0x3366ff,12,200,2); pl1.position.set(100,12,-40); scene.add(pl1);
+const pl2=new THREE.PointLight(0xff4422,12,200,2); pl2.position.set(-100,12,60); scene.add(pl2);
 
 // Mobile detection
 const isMobile=('ontouchstart' in window)||(navigator.maxTouchPoints>0)||window.matchMedia('(pointer:coarse)').matches;
@@ -674,10 +676,10 @@ skinBtn.addEventListener('click',()=>{buildSkinUI();skinPanel.classList.toggle('
 skinClose.addEventListener('click',()=>skinPanel.classList.remove('active'));
 
 // Map
-const LIM=100,PR=0.85,EYH=1.7,OBST=[],PLATS=[];
-const gndM=new THREE.Mesh(new THREE.PlaneGeometry(260,260),new THREE.MeshStandardMaterial({color:0x161a20,roughness:1}));
+const LIM=200,PR=0.85,EYH=1.7,OBST=[],PLATS=[];
+const gndM=new THREE.Mesh(new THREE.PlaneGeometry(500,500),new THREE.MeshStandardMaterial({color:0x161a20,roughness:1}));
 gndM.rotation.x=-Math.PI/2;gndM.receiveShadow=true;scene.add(gndM);
-const gridH=new THREE.GridHelper(260,120,0x00aa44,0x0e1a10);gridH.position.y=0.02;scene.add(gridH);
+const gridH=new THREE.GridHelper(500,200,0x00aa44,0x0e1a10);gridH.position.y=0.02;scene.add(gridH);
 
 let mapMeshes=[];
 function clearMap(){
@@ -715,226 +717,326 @@ function buildMap(sid){
   };
 
   // Always add boundary walls
-  addBox(0,4,-LIM,200,8,2,C.concrete);addBox(0,4,LIM,200,8,2,C.concrete);
-  addBox(-LIM,4,0,2,8,200,C.concrete);addBox(LIM,4,0,2,8,200,C.concrete);
+  addBox(0,5,-LIM,400,10,3,C.concrete);addBox(0,5,LIM,400,10,3,C.concrete);
+  addBox(-LIM,5,0,3,10,400,C.concrete);addBox(LIM,5,0,3,10,400,C.concrete);
 
   if(sid===1){// 훈련장 - military training field, green, simple
     const W=C.green,D=C.darkGreen,S=C.sand;
     // Central sandbag compound
     addBox(0,1.5,0,16,3,2,S);addBox(0,1.5,16,16,3,2,S);addBox(-9,1.5,8,2,3,16,S);addBox(9,1.5,8,2,3,16,S);
-    // Wooden target frames
-    for(let i=0;i<8;i++){const a=i/8*Math.PI*2,r=28;addBox(Math.cos(a)*r,1.5,Math.sin(a)*r,1,3,0.5,C.wood);}
-    // Sandbag walls scattered
+    // Wooden target frames - expanded ring
+    for(let i=0;i<12;i++){const a=i/12*Math.PI*2,r=40;addBox(Math.cos(a)*r,1.5,Math.sin(a)*r,1,3,0.5,C.wood);}
+    for(let i=0;i<8;i++){const a=i/8*Math.PI*2,r=70;addBox(Math.cos(a)*r,1.5,Math.sin(a)*r,1,3,0.5,C.wood);}
+    // Sandbag walls scattered - more coverage
     addBox(-25,1,-15,10,2,2,S);addBox(25,1,-15,10,2,2,S);addBox(-25,1,15,10,2,2,S);addBox(25,1,15,10,2,2,S);
     addBox(0,1,-30,8,2,2,S);addBox(-40,1,0,2,2,10,S);addBox(40,1,0,2,2,10,S);
-    // Training bunkers
+    addBox(-60,1,-40,12,2,2,S);addBox(60,1,-40,12,2,2,S);addBox(-60,1,40,12,2,2,S);addBox(60,1,40,12,2,2,S);
+    addBox(0,1,-70,14,2,2,S);addBox(-80,1,-20,2,2,14,S);addBox(80,1,-20,2,2,14,S);
+    // Training bunkers - larger and more
     addBox(-50,2,-40,12,4,10,W);addBox(50,2,-40,12,4,10,W);addBox(-50,2,40,12,4,10,W);addBox(50,2,40,12,4,10,W);
-    // Supply crates
+    addBox(-100,3,-80,16,6,14,W);addBox(100,3,-80,16,6,14,W);addBox(-100,3,80,16,6,14,W);addBox(100,3,80,16,6,14,W);
+    addBox(-120,2,0,14,4,10,D);addBox(120,2,0,14,4,10,D);
+    // Supply crates - scattered across map
     addBox(-15,1,-50,4,2,4,C.wood);addBox(15,1,-50,4,2,4,C.wood);addBox(0,1,-50,4,2,4,C.wood);
+    addBox(-80,1,-50,4,2,4,C.wood);addBox(80,1,-50,4,2,4,C.wood);addBox(-40,1,-80,4,2,4,C.wood);addBox(40,1,-80,4,2,4,C.wood);
+    addBox(0,1,80,4,2,4,C.wood);addBox(-90,1,40,4,2,4,C.wood);addBox(90,1,40,4,2,4,C.wood);
     // Low barriers near spawn
-    addBox(-30,1,55,6,2,2,S);addBox(30,1,55,6,2,2,S);
-    // Elevated platform - command post
+    addBox(-30,1,55,6,2,2,S);addBox(30,1,55,6,2,2,S);addBox(-50,1,80,8,2,2,S);addBox(50,1,80,8,2,2,S);
+    // Command posts - expanded
     addBox(-70,1,0,18,2,18,D);addBox(-70,3,0,12,4,12,W);addBox(-70,4,-8,12,1,4,C.wood);
     addBox(70,1,0,18,2,18,D);addBox(70,3,0,12,4,12,W);
-    // Corner watchtowers
+    addBox(0,1,-100,20,2,20,D);addBox(0,3,-100,14,4,14,W);
+    // Watchtowers - corners expanded
+    addBox(-150,4,-150,8,8,8,W);addBox(150,4,-150,8,8,8,W);addBox(-150,4,150,8,8,8,W);addBox(150,4,150,8,8,8,W);
     addBox(-75,3,-75,6,6,6,W);addBox(75,3,-75,6,6,6,W);addBox(-75,3,75,6,6,6,W);addBox(75,3,75,6,6,6,W);
+    // Obstacle course area
+    for(let i=-3;i<=3;i++) addBox(i*12,1,-120,3,2,3,S);
+    for(let i=-3;i<=3;i++) addBox(i*12+6,1,-130,3,2,3,S);
+    // Perimeter road barriers
+    addBox(-140,1,0,2,2,60,S);addBox(140,1,0,2,2,60,S);addBox(0,1,140,60,2,2,S);addBox(0,1,-140,60,2,2,S);
   } else if(sid===2){// 도시 골목 - urban concrete city
     const W=C.concrete,D=C.darkConcrete,B=0x6a5040;
-    // City block grid
+    // City block grid - inner
     addBox(-30,4,-30,12,8,3,W);addBox(-30,4,30,12,8,3,W);addBox(30,4,-30,12,8,3,W);addBox(30,4,30,12,8,3,W);
     addBox(-30,4,-30,3,8,12,W);addBox(-30,4,30,3,8,12,W);addBox(30,4,-30,3,8,12,W);addBox(30,4,30,3,8,12,W);
-    // Apartment blocks
+    // Apartment blocks - inner ring
     addBox(-55,6,-20,10,12,20,B);addBox(55,6,-20,10,12,20,B);addBox(-55,6,20,10,12,20,B);addBox(55,6,20,10,12,20,B);
     addBox(-20,6,-55,20,12,10,B);addBox(20,6,-55,20,12,10,B);addBox(-20,6,55,20,12,10,B);addBox(20,6,55,20,12,10,B);
-    // Street barricades - cars/dumpsters
+    // Outer city blocks - large buildings
+    addBox(-110,8,-60,18,16,24,B);addBox(110,8,-60,18,16,24,B);addBox(-110,8,60,18,16,24,B);addBox(110,8,60,18,16,24,B);
+    addBox(-60,10,-110,24,20,18,B);addBox(60,10,-110,24,20,18,B);addBox(-60,8,110,24,16,18,B);addBox(60,8,110,24,16,18,B);
+    addBox(0,7,-100,16,14,16,B);addBox(0,7,100,16,14,16,B);
+    // Mid-range buildings
+    addBox(-80,5,0,14,10,14,W);addBox(80,5,0,14,10,14,W);addBox(0,5,-80,14,10,14,W);
+    // Street barricades
     addBox(-15,1,5,5,2,2,C.metal);addBox(15,1,5,5,2,2,C.metal);addBox(-15,1,-5,5,2,2,C.metal);addBox(15,1,-5,5,2,2,C.metal);
-    // Concrete barriers
+    addBox(-50,1,-50,6,2,3,C.metal);addBox(50,1,-50,6,2,3,C.metal);addBox(-50,1,50,6,2,3,C.metal);addBox(50,1,50,6,2,3,C.metal);
+    // Concrete barriers - expanded
     addBox(0,1,-20,18,2,2,D);addBox(0,1,20,18,2,2,D);addBox(-20,1,0,2,2,18,D);addBox(20,1,0,2,2,18,D);
+    addBox(-70,1,-40,16,2,2,D);addBox(70,1,-40,16,2,2,D);addBox(-70,1,40,16,2,2,D);addBox(70,1,40,16,2,2,D);
+    addBox(0,1,-80,20,2,2,D);addBox(-90,1,0,2,2,20,D);addBox(90,1,0,2,2,20,D);
     // Low walls
     addBox(-40,1.5,0,2,3,20,W);addBox(40,1.5,0,2,3,20,W);addBox(0,1.5,-40,20,3,2,W);addBox(0,1.5,40,20,3,2,W);
-    // Dumpsters
+    // Dumpsters & cars scattered
     addBox(-8,1,-8,3,2,2,C.orange);addBox(8,1,-8,3,2,2,C.orange);addBox(-8,1,8,3,2,2,C.orange);addBox(8,1,8,3,2,2,C.orange);
-    // Corner pillars
+    addBox(-90,1,-30,5,2,2,C.orange);addBox(90,1,30,5,2,2,C.orange);addBox(-40,1,-90,5,2,2,C.metal);addBox(40,1,90,5,2,2,C.metal);
+    // Corner pillars & structures
     addBox(-50,2,0,4,4,4,D);addBox(50,2,0,4,4,4,D);addBox(0,2,-50,4,4,4,D);addBox(0,2,50,4,4,4,D);
+    addBox(-130,3,-130,10,6,10,D);addBox(130,3,-130,10,6,10,D);addBox(-130,3,130,10,6,10,D);addBox(130,3,130,10,6,10,D);
     // Near-spawn covers
     addBox(-25,1,60,6,3,3,W);addBox(25,1,60,6,3,3,W);addBox(0,1,70,10,3,2,W);
+    // Alleyway walls
+    for(let i=-3;i<=3;i++){addBox(-100,3,i*30,2,6,18,W);addBox(100,3,i*30,2,6,18,W);}
   } else if(sid===3){// 산업 단지 - industrial factory
     const R=C.rust,M=C.metal,D=C.darkConcrete;
-    // Factory buildings
+    // Factory buildings - expanded
     addBox(-40,5,-30,20,10,15,M);addBox(40,5,-30,20,10,15,M);addBox(-40,5,30,20,10,15,M);addBox(40,5,30,20,10,15,M);
+    addBox(-100,7,-60,24,14,20,M);addBox(100,7,-60,24,14,20,M);addBox(-100,7,60,24,14,20,M);addBox(100,7,60,24,14,20,M);
+    addBox(-140,5,0,18,10,18,D);addBox(140,5,0,18,10,18,D);addBox(0,5,-140,18,10,18,D);
     // Central machinery complex
     addBox(-10,2.5,0,8,5,8,R);addBox(10,2.5,0,8,5,8,R);addBox(0,2.5,-12,10,5,6,M);addBox(0,2.5,12,10,5,6,M);
-    // Large cylindrical tanks (boxes approximate)
+    // Large tanks - outer ring
     addBox(-60,4,-10,8,8,8,M);addBox(60,4,-10,8,8,8,M);addBox(-60,4,10,8,8,8,M);addBox(60,4,10,8,8,8,M);
-    // Pipe runs
+    addBox(-120,5,-40,10,10,10,M);addBox(120,5,-40,10,10,10,M);addBox(-120,5,40,10,10,10,M);addBox(120,5,40,10,10,10,M);
+    addBox(0,6,-90,12,12,12,M);addBox(0,4,90,10,8,10,R);
+    // Pipe runs - extensive network
     addBox(-30,2,0,2,3,40,R);addBox(30,2,0,2,3,40,R);addBox(0,2,-30,40,3,2,R);
+    addBox(-70,2,-30,2,3,60,R);addBox(70,2,-30,2,3,60,R);addBox(0,2,-80,80,3,2,R);addBox(0,2,80,80,3,2,R);
+    addBox(-100,3,0,2,4,100,R);addBox(100,3,0,2,4,100,R);
     // Low barriers
     addBox(-20,1,-20,10,2,2,D);addBox(20,1,-20,10,2,2,D);addBox(-20,1,20,10,2,2,D);addBox(20,1,20,10,2,2,D);
-    // Stacked crates
+    addBox(-50,1,-60,12,2,2,D);addBox(50,1,-60,12,2,2,D);addBox(-50,1,60,12,2,2,D);addBox(50,1,60,12,2,2,D);
+    // Stacked crates everywhere
     addBox(-5,1,-40,6,2,4,C.wood);addBox(5,1,-40,6,2,4,C.wood);addBox(0,3,-40,6,2,4,C.wood);
     addBox(-5,1,40,6,2,4,C.wood);addBox(5,1,40,6,2,4,C.wood);
-    // Catwalks / elevated platforms
-    addBox(-25,3,-45,20,1,6,M);addBox(25,3,-45,20,1,6,M);
-    // Corner smokestacks
+    addBox(-80,1,0,6,2,4,C.wood);addBox(80,1,0,6,2,4,C.wood);addBox(-80,3,0,6,2,4,C.wood);
+    addBox(-30,1,-100,6,2,4,C.wood);addBox(30,1,-100,6,2,4,C.wood);addBox(0,1,100,6,2,4,C.wood);
+    // Catwalks
+    addBox(-25,3,-45,20,1,6,M);addBox(25,3,-45,20,1,6,M);addBox(-70,3,0,6,1,30,M);addBox(70,3,0,6,1,30,M);
+    // Smokestacks - expanded
     addBox(-75,8,-75,5,16,5,D);addBox(75,8,-75,5,16,5,D);addBox(-75,8,75,5,16,5,D);addBox(75,8,75,5,16,5,D);
+    addBox(-150,10,-150,6,20,6,D);addBox(150,10,-150,6,20,6,D);addBox(-150,10,150,6,20,6,D);addBox(150,10,150,6,20,6,D);
     // Spawn covers
     addBox(-30,1,55,6,3,4,M);addBox(30,1,55,6,3,4,M);
   } else if(sid===4){// 항구 - harbor/docks
     const Cnt=C.orange,Grn=C.darkGreen,Mtl=C.metal,Cnc=C.concrete;
-    // Shipping containers stacked
-    for(let i=-2;i<=2;i++){addBox(i*14,1.5,-35,12,3,6,i%2===0?Cnt:0x3a6a8a);addBox(i*14,4.5,-35,12,3,6,i%2===0?0x3a6a8a:Cnt);}
-    for(let i=-2;i<=2;i++){addBox(i*14,1.5,35,12,3,6,i%2===0?0x8a3a20:Cnt);}
-    // Dock buildings
+    // Shipping containers - massive yard
+    for(let i=-4;i<=4;i++){addBox(i*14,1.5,-35,12,3,6,i%2===0?Cnt:0x3a6a8a);addBox(i*14,4.5,-35,12,3,6,i%2===0?0x3a6a8a:Cnt);}
+    for(let i=-4;i<=4;i++){addBox(i*14,1.5,35,12,3,6,i%2===0?0x8a3a20:Cnt);}
+    for(let i=-3;i<=3;i++){addBox(i*14,1.5,-90,12,3,6,Cnt);addBox(i*14,4.5,-90,12,3,6,0x3a6a8a);}
+    for(let i=-3;i<=3;i++){addBox(i*14,1.5,90,12,3,6,0x8a3a20);}
+    // Dock buildings - expanded
     addBox(-60,4,-40,16,8,20,Cnc);addBox(60,4,-40,16,8,20,Cnc);addBox(-60,4,40,16,8,20,Cnc);
-    // Crane base
-    addBox(-70,6,0,8,12,8,Mtl);addBox(70,6,0,8,12,8,Mtl);
-    // Low concrete barriers
+    addBox(-120,5,-60,20,10,24,Cnc);addBox(120,5,-60,20,10,24,Cnc);addBox(-120,5,60,20,10,24,Cnc);addBox(120,5,60,20,10,24,Cnc);
+    addBox(0,6,-130,24,12,18,Cnc);addBox(0,4,130,18,8,14,Cnc);
+    // Cranes - taller
+    addBox(-70,8,0,8,16,8,Mtl);addBox(70,8,0,8,16,8,Mtl);addBox(-140,10,0,6,20,6,Mtl);addBox(140,10,0,6,20,6,Mtl);
+    // Concrete barriers
     addBox(-25,1,0,2,2,30,Cnc);addBox(25,1,0,2,2,30,Cnc);addBox(0,1,-18,30,2,2,Cnc);addBox(0,1,18,30,2,2,Cnc);
-    // Crates near player
+    addBox(-80,1,-20,2,2,40,Cnc);addBox(80,1,-20,2,2,40,Cnc);addBox(0,1,-60,50,2,2,Cnc);addBox(0,1,60,50,2,2,Cnc);
+    // Crates
     addBox(-10,1,48,4,2,4,C.wood);addBox(10,1,48,4,2,4,C.wood);addBox(-10,3,48,4,2,4,C.wood);
-    // Bollards (small pillars)
-    for(let i=-4;i<=4;i++){addBox(i*10,1,-70,2,2,2,Cnc);addBox(i*10,1,70,2,2,2,Cnc);}
+    addBox(-50,1,-80,4,2,4,C.wood);addBox(50,1,-80,4,2,4,C.wood);addBox(-90,1,0,4,2,4,C.wood);addBox(90,1,0,4,2,4,C.wood);
+    // Bollards - expanded
+    for(let i=-8;i<=8;i++){addBox(i*12,1,-120,2,2,2,Cnc);addBox(i*12,1,120,2,2,2,Cnc);}
     // Fuel tanks
-    addBox(-45,2,0,8,4,8,C.red);addBox(45,2,0,8,4,8,C.red);
+    addBox(-45,2,0,8,4,8,C.red);addBox(45,2,0,8,4,8,C.red);addBox(-100,3,-100,10,6,10,C.red);addBox(100,3,-100,10,6,10,C.red);
     // Spawn covers
     addBox(-30,1,60,6,3,4,Cnt);addBox(30,1,60,6,3,4,Cnt);
   } else if(sid===5){// 야간 정글 - night jungle
     const Dk=C.darkGreen,Tr=0x3a2510,Rk=0x404848;
-    // Dense tree trunks (tall pillars)
-    const treePos=[[-20,-15],[-40,5],[20,-15],[40,5],[-10,30],[10,30],[-30,45],[30,45],
-                   [-60,-30],[60,-30],[-60,30],[60,30],[0,-45],[0,-60],[-50,-55],[50,-55],
-                   [-15,55],[15,55],[35,-40],[-35,-40],[0,0],[-25,20],[25,20]];
+    // Dense tree trunks - massive jungle
+    const treePos=[];
+    for(let x=-160;x<=160;x+=20){for(let z=-160;z<=160;z+=20){
+      if(Math.abs(x)<15&&Math.abs(z)<15)continue; // clear center
+      if(Math.random()>0.35) treePos.push([x+(Math.random()-0.5)*12,z+(Math.random()-0.5)*12]);
+    }}
     treePos.forEach(([x,z])=>{addBox(x,4,z,2.5,8,2.5,Tr);addBox(x,0.5,z,4,1,4,Rk);});
-    // Rock formations
+    // Rock formations - scattered
     addBox(-35,1.5,-30,7,3,5,Rk);addBox(35,1.5,-30,7,3,5,Rk);addBox(-35,1.5,30,7,3,5,Rk);addBox(35,1.5,30,7,3,5,Rk);
     addBox(0,2,0,5,4,8,Rk);addBox(-50,1.5,0,8,3,5,Rk);addBox(50,1.5,0,8,3,5,Rk);
-    // Dense bush clusters (low wide boxes)
-    for(let i=0;i<12;i++){const a=i/12*Math.PI*2,r=25+Math.random()*20;addBox(Math.cos(a)*r,0.6,Math.sin(a)*r,3+Math.random()*4,1.2,3+Math.random()*4,Dk,false);}
+    addBox(-100,2,-80,10,4,8,Rk);addBox(100,2,-80,10,4,8,Rk);addBox(-100,2,80,10,4,8,Rk);addBox(100,2,80,10,4,8,Rk);
+    addBox(0,3,-100,8,6,8,Rk);addBox(-80,2,0,8,4,10,Rk);addBox(80,2,0,8,4,10,Rk);
+    // Dense bush clusters
+    for(let i=0;i<30;i++){const a=Math.random()*Math.PI*2,r=25+Math.random()*120;addBox(Math.cos(a)*r,0.6,Math.sin(a)*r,3+Math.random()*5,1.2,3+Math.random()*5,Dk,false);}
     // Log barricades
     addBox(-15,1,15,10,2,2,Tr);addBox(15,1,15,10,2,2,Tr);addBox(-15,1,-15,10,2,2,Tr);addBox(15,1,-15,10,2,2,Tr);
-    // Ruins in jungle
+    addBox(-60,1,-60,12,2,2,Tr);addBox(60,1,-60,12,2,2,Tr);addBox(-60,1,60,12,2,2,Tr);addBox(60,1,60,12,2,2,Tr);
+    // Ancient ruins scattered
     addBox(-55,2,-55,10,4,10,0x3a3c38);addBox(55,2,-55,10,4,10,0x3a3c38);addBox(-55,2,55,10,4,10,0x3a3c38);addBox(55,2,55,10,4,10,0x3a3c38);
+    addBox(-130,3,-120,14,6,14,0x3a3c38);addBox(130,3,-120,14,6,14,0x3a3c38);addBox(-130,3,120,14,6,14,0x3a3c38);addBox(130,3,120,14,6,14,0x3a3c38);
+    addBox(0,2,130,10,4,10,0x3a3c38);
     // Spawn cover
     addBox(-20,1,60,6,3,4,Rk);addBox(20,1,60,6,3,4,Rk);
   } else if(sid===6){// 핵 발전소 - nuclear plant
     const Gn=0x2a5a20,Yl=0x888820,Cnt=C.concrete,Mtl=C.metal;
-    // Cooling towers (large square approximations)
+    // Cooling towers - massive
     addBox(-50,8,-50,18,16,18,Cnt);addBox(50,8,-50,18,16,18,Cnt);addBox(-50,8,50,18,16,18,Cnt);addBox(50,8,50,18,16,18,Cnt);
-    // Reactor building
-    addBox(0,6,0,22,12,22,0x404838);
-    // Pipe network
+    addBox(-120,10,-100,22,20,22,Cnt);addBox(120,10,-100,22,20,22,Cnt);addBox(-120,10,100,22,20,22,Cnt);addBox(120,10,100,22,20,22,Cnt);
+    // Reactor buildings
+    addBox(0,6,0,22,12,22,0x404838);addBox(0,4,-80,18,8,18,0x404838);addBox(0,4,80,18,8,18,0x404838);
+    // Pipe network - sprawling
     addBox(-30,2,0,2,3,50,Mtl);addBox(30,2,0,2,3,50,Mtl);addBox(0,2,-30,50,3,2,Mtl);addBox(0,2,30,50,3,2,Mtl);
+    addBox(-80,3,0,2,4,120,Mtl);addBox(80,3,0,2,4,120,Mtl);addBox(0,3,-80,120,4,2,Mtl);addBox(0,3,80,120,4,2,Mtl);
     addBox(-15,3,15,2,5,2,Mtl);addBox(15,3,15,2,5,2,Mtl);addBox(-15,3,-15,2,5,2,Mtl);addBox(15,3,-15,2,5,2,Mtl);
-    // Waste barrels
+    // Waste barrels - contamination zones
     addBox(-10,1,-35,4,2,4,Gn);addBox(10,1,-35,4,2,4,Gn);addBox(-10,1,35,4,2,4,Gn);addBox(10,1,35,4,2,4,Gn);
-    // Containment walls
+    addBox(-60,1,-20,4,2,4,Gn);addBox(60,1,-20,4,2,4,Gn);addBox(-100,1,0,4,2,4,Gn);addBox(100,1,0,4,2,4,Gn);
+    // Containment walls - layered
     addBox(-22,2,0,2,4,30,Cnt);addBox(22,2,0,2,4,30,Cnt);addBox(0,2,-22,30,4,2,Cnt);addBox(0,2,22,30,4,2,Cnt);
-    // Security checkpoint
+    addBox(-60,2.5,0,2,5,60,Cnt);addBox(60,2.5,0,2,5,60,Cnt);addBox(0,2.5,-60,60,5,2,Cnt);addBox(0,2.5,60,60,5,2,Cnt);
+    // Security checkpoints
     addBox(-5,1.5,55,3,3,2,Cnt);addBox(5,1.5,55,3,3,2,Cnt);addBox(-30,1.5,60,8,3,2,Cnt);addBox(30,1.5,60,8,3,2,Cnt);
-    // Elevated catwalks
-    addBox(-40,3,0,2,1,30,Mtl);addBox(40,3,0,2,1,30,Mtl);
+    // Storage buildings
+    addBox(-140,4,0,16,8,14,Cnt);addBox(140,4,0,16,8,14,Cnt);addBox(0,4,-140,14,8,16,Cnt);
+    // Catwalks
+    addBox(-40,3,0,2,1,30,Mtl);addBox(40,3,0,2,1,30,Mtl);addBox(-100,3,-50,2,1,40,Mtl);addBox(100,3,-50,2,1,40,Mtl);
   } else if(sid===7){// 군사 기지 - military base
-    const Grn=0x3a4a28,Cnt=C.concrete,Stl=C.metal,Blk=C.black;
+    const Grn=0x3a4a28,Cnt=C.concrete,Stl=C.metal,Blk=C.black,Sb=0x8a7a5a;
     // Main compound
     addBox(0,2.5,0,20,5,3,Cnt);addBox(0,2.5,20,20,5,3,Cnt);addBox(-11,2.5,10,3,5,20,Cnt);addBox(11,2.5,10,3,5,20,Cnt);
-    // Vehicle barricades (large)
+    // Vehicle barricades
     addBox(-25,1.5,0,4,3,4,Stl);addBox(25,1.5,0,4,3,4,Stl);addBox(-25,1.5,20,4,3,4,Stl);addBox(25,1.5,20,4,3,4,Stl);
-    // Barracks buildings
+    addBox(-60,2,50,8,4,14,Blk);addBox(60,2,50,8,4,14,Blk);addBox(-60,2,-50,8,4,14,Blk);addBox(60,2,-50,8,4,14,Blk);
+    // Barracks - expanded
     addBox(-55,3,-30,14,6,22,Grn);addBox(55,3,-30,14,6,22,Grn);addBox(-55,3,30,14,6,22,Grn);addBox(55,3,30,14,6,22,Grn);
-    // Watchtowers
+    addBox(-110,4,-70,18,8,24,Grn);addBox(110,4,-70,18,8,24,Grn);addBox(-110,4,70,18,8,24,Grn);addBox(110,4,70,18,8,24,Grn);
+    addBox(-140,3,0,16,6,16,Grn);addBox(140,3,0,16,6,16,Grn);addBox(0,3,-120,16,6,16,Grn);addBox(0,3,120,16,6,16,Grn);
+    // Watchtowers - more
     addBox(-75,5,-75,6,10,6,Cnt);addBox(75,5,-75,6,10,6,Cnt);addBox(-75,5,75,6,10,6,Cnt);addBox(75,5,75,6,10,6,Cnt);
-    // Trench systems (low wide barriers)
+    addBox(-150,6,-150,8,12,8,Cnt);addBox(150,6,-150,8,12,8,Cnt);addBox(-150,6,150,8,12,8,Cnt);addBox(150,6,150,8,12,8,Cnt);
+    // Trench systems - extended
     addBox(-30,0.5,-15,20,1,3,0x3a3020);addBox(30,0.5,-15,20,1,3,0x3a3020);addBox(0,0.5,-40,40,1,3,0x3a3020);
     addBox(-30,0.5,40,20,1,3,0x3a3020);addBox(30,0.5,40,20,1,3,0x3a3020);
-    // Sandbag walls
-    addBox(-15,1.5,-25,12,3,2,0x8a7a5a);addBox(15,1.5,-25,12,3,2,0x8a7a5a);addBox(0,1.5,-45,16,3,2,0x8a7a5a);
+    addBox(-80,0.5,-40,30,1,3,0x3a3020);addBox(80,0.5,-40,30,1,3,0x3a3020);addBox(0,0.5,-90,60,1,3,0x3a3020);
+    // Sandbag walls - more
+    addBox(-15,1.5,-25,12,3,2,Sb);addBox(15,1.5,-25,12,3,2,Sb);addBox(0,1.5,-45,16,3,2,Sb);
+    addBox(-50,1.5,-80,14,3,2,Sb);addBox(50,1.5,-80,14,3,2,Sb);addBox(-90,1.5,0,2,3,14,Sb);addBox(90,1.5,0,2,3,14,Sb);
+    addBox(-30,1.5,-100,12,3,2,Sb);addBox(30,1.5,-100,12,3,2,Sb);addBox(0,1.5,100,18,3,2,Sb);
+    // Armored vehicles
+    addBox(-42,2,0,8,4,14,Blk);addBox(42,2,0,8,4,14,Blk);addBox(-100,2,-30,8,4,14,Blk);addBox(100,2,30,8,4,14,Blk);
     // Spawn cover
     addBox(-30,1.5,60,8,3,4,Cnt);addBox(30,1.5,60,8,3,4,Cnt);addBox(0,1.5,70,12,3,2,Cnt);
-    // Armored vehicles (large boxes)
-    addBox(-42,2,0,8,4,14,Blk);addBox(42,2,0,8,4,14,Blk);
   } else if(sid===8){// 폐허 도시 - ruined city
     const Rb=0x4a3830,Cr=0x3a3028,Bk=C.black,Gl=0x6a5848;
-    // Collapsed building hulks
+    // Collapsed building hulks - city grid
     addBox(-35,4,-35,14,8,14,Rb);addBox(35,4,-35,14,8,14,Rb);addBox(-35,4,35,14,8,14,Rb);addBox(35,4,35,14,8,14,Rb);
-    // Rubble piles (irregular low shapes)
+    addBox(-90,6,-70,18,12,16,Rb);addBox(90,6,-70,18,12,16,Rb);addBox(-90,6,70,18,12,16,Rb);addBox(90,6,70,18,12,16,Rb);
+    addBox(-130,5,0,16,10,16,Rb);addBox(130,5,0,16,10,16,Rb);addBox(0,5,-130,16,10,16,Rb);addBox(0,5,130,16,10,16,Rb);
+    addBox(-60,8,-120,20,16,18,Rb);addBox(60,8,-120,20,16,18,Rb);addBox(-60,7,120,18,14,16,Rb);addBox(60,7,120,18,14,16,Rb);
+    // Rubble piles
     addBox(-15,1,-15,8,2,6,Cr);addBox(15,1,-15,8,2,6,Cr);addBox(-15,1,15,8,2,6,Cr);addBox(15,1,15,8,2,6,Cr);
     addBox(-8,1.5,-30,6,3,4,Rb);addBox(8,1.5,-30,6,3,4,Rb);addBox(0,1.5,-40,10,3,6,Rb);
-    // Broken walls
+    // Broken walls - extensive
     addBox(-25,2,0,2,4,18,Gl);addBox(25,2,0,2,4,18,Gl);addBox(0,2,-25,18,4,2,Gl);addBox(0,2,25,18,4,2,Gl);
     addBox(-20,1.5,-50,14,3,2,Cr);addBox(20,1.5,50,14,3,2,Cr);
-    // Burnt-out vehicles
+    addBox(-70,2,-30,2,4,24,Gl);addBox(70,2,-30,2,4,24,Gl);addBox(-70,2,30,2,4,24,Gl);addBox(70,2,30,2,4,24,Gl);
+    addBox(-40,2,-90,24,4,2,Gl);addBox(40,2,-90,24,4,2,Gl);addBox(-40,2,90,24,4,2,Gl);addBox(40,2,90,24,4,2,Gl);
+    // Burnt-out vehicles - everywhere
     addBox(-50,1.5,0,10,3,5,Bk);addBox(50,1.5,0,10,3,5,Bk);addBox(0,1.5,-55,5,3,10,Bk);addBox(0,1.5,55,5,3,10,Bk);
-    // Debris clusters
-    for(let i=0;i<10;i++){const a=i/10*Math.PI*2,r=42;addBox(Math.cos(a)*r,1,Math.sin(a)*r,4+Math.random()*6,1.5+Math.random()*2,4+Math.random()*6,Cr);}
+    addBox(-110,1.5,-40,10,3,5,Bk);addBox(110,1.5,40,10,3,5,Bk);addBox(-40,1.5,-110,5,3,10,Bk);addBox(40,1.5,110,5,3,10,Bk);
+    // Debris clusters - scattered across whole map
+    for(let i=0;i<20;i++){const a=i/20*Math.PI*2,r=42+Math.random()*80;addBox(Math.cos(a)*r,1,Math.sin(a)*r,4+Math.random()*6,1.5+Math.random()*2,4+Math.random()*6,Cr);}
     // Spawn cover
     addBox(-25,1.5,60,8,3,4,Rb);addBox(25,1.5,60,8,3,4,Rb);
   } else if(sid===9){// 요새 - fortress
     const St=C.stone,Dk=C.darkStone,Bl=C.blue;
-    // Outer fortress walls
-    addBox(0,4,-70,140,8,5,St);addBox(0,4,70,140,8,5,St);addBox(-70,4,0,5,8,140,St);addBox(70,4,0,5,8,140,St);
-    // Gate towers
-    addBox(-75,6,-75,8,12,8,Dk);addBox(75,6,-75,8,12,8,Dk);addBox(-75,6,75,8,12,8,Dk);addBox(75,6,75,8,12,8,Dk);
+    // Outer fortress walls - massive perimeter
+    addBox(0,5,-140,280,10,6,St);addBox(0,5,140,280,10,6,St);addBox(-140,5,0,6,10,280,St);addBox(140,5,0,6,10,280,St);
+    // Gate towers - corners
+    addBox(-145,7,-145,10,14,10,Dk);addBox(145,7,-145,10,14,10,Dk);addBox(-145,7,145,10,14,10,Dk);addBox(145,7,145,10,14,10,Dk);
+    // Mid-wall towers
+    addBox(0,7,-145,10,14,10,Dk);addBox(0,7,145,10,14,10,Dk);addBox(-145,7,0,10,14,10,Dk);addBox(145,7,0,10,14,10,Dk);
     // Inner compound walls
-    addBox(0,3,-35,60,6,4,St);addBox(0,3,35,60,6,4,St);addBox(-35,3,0,4,6,60,St);addBox(35,3,0,4,6,60,St);
-    // Battlements (crenellations)
-    for(let i=-3;i<=3;i++){addBox(i*18,6.5,-70,5,3,5,Dk);addBox(i*18,6.5,70,5,3,5,Dk);}
-    for(let i=-3;i<=3;i++){addBox(-70,6.5,i*18,5,3,5,Dk);addBox(70,6.5,i*18,5,3,5,Dk);}
+    addBox(0,3,-50,80,6,4,St);addBox(0,3,50,80,6,4,St);addBox(-50,3,0,4,6,80,St);addBox(50,3,0,4,6,80,St);
+    // Battlements
+    for(let i=-7;i<=7;i++){addBox(i*18,8,-140,5,3,5,Dk);addBox(i*18,8,140,5,3,5,Dk);}
+    for(let i=-7;i<=7;i++){addBox(-140,8,i*18,5,3,5,Dk);addBox(140,8,i*18,5,3,5,Dk);}
     // Keep (central tower)
-    addBox(0,8,0,16,16,16,Dk);
-    // Courtyard cover
+    addBox(0,10,0,20,20,20,Dk);
+    // Outer courtyard buildings
+    addBox(-90,4,-90,16,8,14,St);addBox(90,4,-90,16,8,14,St);addBox(-90,4,90,16,8,14,St);addBox(90,4,90,16,8,14,St);
+    // Inner courtyard cover
     addBox(-20,2,0,3,4,15,St);addBox(20,2,0,3,4,15,St);addBox(0,2,-20,15,4,3,St);addBox(0,2,20,15,4,3,St);
-    // Spawn area moat suggestion
+    // Barracks in outer yard
+    addBox(-100,3,0,14,6,20,St);addBox(100,3,0,14,6,20,St);addBox(0,3,-100,20,6,14,St);addBox(0,3,100,20,6,14,St);
+    // Training dummies area
+    for(let i=-2;i<=2;i++) addBox(i*10,1.5,-80,2,3,2,0x6a5040);
+    // Spawn area
     addBox(-30,1.5,60,8,3,4,St);addBox(30,1.5,60,8,3,4,St);
   } else if(sid===10){// 극지 작전 - arctic
-    const Ic=C.ice,DIc=C.darkIce,Sn=0xddeeff,Bk=C.black;
-    // Ice wall formations
+    const Ic=C.ice,DIc=C.darkIce,Sn=0xddeeff,Bk=C.black,Bunk=0x3a4850;
+    // Ice wall formations - massive glacier
     addBox(-30,3,-30,8,6,4,Ic);addBox(30,3,-30,8,6,4,Ic);addBox(-30,3,30,8,6,4,Ic);addBox(30,3,30,8,6,4,Ic);
     addBox(-55,4,-10,4,8,20,DIc);addBox(55,4,-10,4,8,20,DIc);addBox(-55,4,10,4,8,20,DIc);addBox(55,4,10,4,8,20,DIc);
-    // Bunkers
-    addBox(-45,2,-45,14,4,14,0x3a4850);addBox(45,2,-45,14,4,14,0x3a4850);addBox(-45,2,45,14,4,14,0x3a4850);addBox(45,2,45,14,4,14,0x3a4850);
-    // Snow drifts (low irregular)
-    for(let i=0;i<16;i++){const a=i/16*Math.PI*2,r=22+Math.random()*20;addBox(Math.cos(a)*r,0.8,Math.sin(a)*r,4+Math.random()*8,1.5+Math.random()*2,4+Math.random()*8,Sn,false);}
+    addBox(-100,5,-60,6,10,30,DIc);addBox(100,5,-60,6,10,30,DIc);addBox(-100,5,60,6,10,30,DIc);addBox(100,5,60,6,10,30,DIc);
+    addBox(0,6,-120,40,12,8,Ic);addBox(-130,4,0,8,8,40,Ic);addBox(130,4,0,8,8,40,Ic);
+    // Bunkers - expanded
+    addBox(-45,2,-45,14,4,14,Bunk);addBox(45,2,-45,14,4,14,Bunk);addBox(-45,2,45,14,4,14,Bunk);addBox(45,2,45,14,4,14,Bunk);
+    addBox(-110,3,-100,18,6,16,Bunk);addBox(110,3,-100,18,6,16,Bunk);addBox(-110,3,100,18,6,16,Bunk);addBox(110,3,100,18,6,16,Bunk);
+    // Snow drifts - many more
+    for(let i=0;i<35;i++){const a=Math.random()*Math.PI*2,r=22+Math.random()*120;addBox(Math.cos(a)*r,0.8,Math.sin(a)*r,4+Math.random()*10,1.5+Math.random()*2,4+Math.random()*10,Sn,false);}
     // Ice pillars
     addBox(-15,3,0,3,6,3,Ic);addBox(15,3,0,3,6,3,Ic);addBox(0,3,-15,3,6,3,Ic);addBox(0,3,15,3,6,3,Ic);
-    // Crashed plane hull
+    addBox(-70,4,-70,4,8,4,Ic);addBox(70,4,-70,4,8,4,Ic);addBox(-70,4,70,4,8,4,Ic);addBox(70,4,70,4,8,4,Ic);
+    // Crashed plane - bigger wreck
     addBox(0,2.5,-50,30,5,8,0x485868);addBox(-20,2.5,-50,6,5,8,0x485868);addBox(20,2.5,-50,6,5,8,0x485868);
-    // Research station
-    addBox(60,3,0,16,6,12,0x384858);
+    addBox(0,1.5,-65,20,3,6,0x485868);addBox(-15,1,-75,8,2,4,0x485868);addBox(15,1,-75,8,2,4,0x485868);
+    // Research stations - multiple
+    addBox(60,3,0,16,6,12,0x384858);addBox(-60,3,-80,16,6,12,0x384858);addBox(0,4,100,20,8,14,0x384858);
     // Spawn cover
     addBox(-25,1.5,60,8,3,4,DIc);addBox(25,1.5,60,8,3,4,DIc);
   } else if(sid===11){// 지하 벙커 - underground bunker
     const Cn=C.darkConcrete,Pp=C.metal,Lmp=0x3a3030;
-    // Corridor system - lots of walls creating narrow paths
-    addBox(-30,3,0,2,6,60,Cn);addBox(30,3,0,2,6,60,Cn);
-    addBox(-15,3,-30,2,6,20,Cn);addBox(15,3,-30,2,6,20,Cn);
-    addBox(-15,3,20,2,6,20,Cn);addBox(15,3,20,2,6,20,Cn);
+    // Corridor system - expanded maze
+    addBox(-30,3,0,2,6,120,Cn);addBox(30,3,0,2,6,120,Cn);addBox(-60,3,0,2,6,100,Cn);addBox(60,3,0,2,6,100,Cn);
+    addBox(-90,3,0,2,6,80,Cn);addBox(90,3,0,2,6,80,Cn);addBox(-120,3,0,2,6,60,Cn);addBox(120,3,0,2,6,60,Cn);
+    addBox(-15,3,-30,2,6,20,Cn);addBox(15,3,-30,2,6,20,Cn);addBox(-15,3,20,2,6,20,Cn);addBox(15,3,20,2,6,20,Cn);
+    addBox(-45,3,-40,2,6,30,Cn);addBox(45,3,-40,2,6,30,Cn);addBox(-45,3,40,2,6,30,Cn);addBox(45,3,40,2,6,30,Cn);
+    // Cross walls
     addBox(0,3,-45,30,6,2,Cn);addBox(0,3,-15,30,6,2,Cn);addBox(0,3,15,30,6,2,Cn);addBox(0,3,45,30,6,2,Cn);
-    // Support pillars
-    for(let x=-50;x<=50;x+=25){for(let z=-50;z<=50;z+=25){addBox(x,3,z,3,6,3,Lmp);}}
+    addBox(0,3,-80,60,6,2,Cn);addBox(0,3,80,60,6,2,Cn);addBox(0,3,-110,90,6,2,Cn);addBox(0,3,110,90,6,2,Cn);
+    addBox(-75,3,-70,2,6,40,Cn);addBox(75,3,-70,2,6,40,Cn);addBox(-75,3,70,2,6,40,Cn);addBox(75,3,70,2,6,40,Cn);
+    // Support pillars - massive grid
+    for(let x=-150;x<=150;x+=25){for(let z=-150;z<=150;z+=25){addBox(x,3,z,3,6,3,Lmp);}}
     // Equipment crates
     addBox(-22,1,-22,4,2,4,Cn);addBox(22,1,-22,4,2,4,Cn);addBox(-22,1,22,4,2,4,Cn);addBox(22,1,22,4,2,4,Cn);
-    // Pipes along ceiling
-    addBox(-40,4,0,2,2,80,Pp);addBox(40,4,0,2,2,80,Pp);addBox(0,4,-40,80,2,2,Pp);
-    // Blast doors (partial)
+    addBox(-50,1,-60,4,2,4,Cn);addBox(50,1,-60,4,2,4,Cn);addBox(-80,1,30,4,2,4,Cn);addBox(80,1,30,4,2,4,Cn);
+    addBox(-100,1,-80,4,2,4,Cn);addBox(100,1,-80,4,2,4,Cn);addBox(0,1,-100,4,2,4,Cn);addBox(0,1,100,4,2,4,Cn);
+    // Pipes - extensive
+    addBox(-40,4,0,2,2,160,Pp);addBox(40,4,0,2,2,160,Pp);addBox(0,4,-40,160,2,2,Pp);
+    addBox(-100,4,-50,2,2,100,Pp);addBox(100,4,50,2,2,100,Pp);
+    // Blast doors
     addBox(-8,3,-60,16,6,3,0x484848);addBox(-8,3,60,16,6,3,0x484848);
+    addBox(-8,3,-130,16,6,3,0x484848);addBox(-8,3,130,16,6,3,0x484848);
+    // Server rooms
+    addBox(-110,3,-110,16,6,16,Cn);addBox(110,3,-110,16,6,16,Cn);addBox(-110,3,110,16,6,16,Cn);addBox(110,3,110,16,6,16,Cn);
     // Spawn area
     addBox(-20,1.5,65,6,3,3,Cn);addBox(20,1.5,65,6,3,3,Cn);
   } else {// sid===12: 최후의 전투 - final stand
     const Bk=C.black,Rd=C.red,Dr=0x3a1010,Sk=0x1a0808;
-    // Hellish burning ruins - mix of all previous elements
-    // Central ruined keep
-    addBox(0,6,0,20,12,20,Bk);addBox(0,1,0,12,2,12,Dr);
-    // Ruined walls
+    // Central ruined keep - massive
+    addBox(0,8,0,24,16,24,Bk);addBox(0,1,0,16,2,16,Dr);
+    // Ruined fortress walls
     addBox(-35,3,-35,12,6,4,Dr);addBox(35,3,-35,12,6,4,Dr);addBox(-35,3,35,12,6,4,Dr);addBox(35,3,35,12,6,4,Dr);
     addBox(-60,4,-60,8,8,8,Bk);addBox(60,4,-60,8,8,8,Bk);addBox(-60,4,60,8,8,8,Bk);addBox(60,4,60,8,8,8,Bk);
-    // Burning vehicles
+    addBox(-100,5,-100,12,10,12,Bk);addBox(100,5,-100,12,10,12,Bk);addBox(-100,5,100,12,10,12,Bk);addBox(100,5,100,12,10,12,Bk);
+    addBox(-140,6,-50,16,12,14,Bk);addBox(140,6,-50,16,12,14,Bk);addBox(-140,6,50,16,12,14,Bk);addBox(140,6,50,16,12,14,Bk);
+    addBox(0,7,-120,20,14,18,Bk);addBox(0,6,120,18,12,16,Bk);
+    // Burning vehicles - scattered
     addBox(-20,1.5,-20,10,3,5,Bk);addBox(20,1.5,-20,10,3,5,Bk);addBox(-20,1.5,20,10,3,5,Bk);addBox(20,1.5,20,10,3,5,Bk);
-    // Broken pillars
+    addBox(-80,1.5,0,10,3,5,Bk);addBox(80,1.5,0,10,3,5,Bk);addBox(0,1.5,-80,5,3,10,Bk);addBox(0,1.5,80,5,3,10,Bk);
+    addBox(-50,1.5,-80,10,3,5,Bk);addBox(50,1.5,80,10,3,5,Bk);
+    // Broken pillars - extensive
     addBox(-45,3,0,4,6,4,Dr);addBox(45,3,0,4,6,4,Dr);addBox(0,3,-45,4,6,4,Dr);addBox(0,3,45,4,6,4,Dr);
-    // Rubble rings
+    addBox(-90,3,-40,4,6,4,Dr);addBox(90,3,-40,4,6,4,Dr);addBox(-90,3,40,4,6,4,Dr);addBox(90,3,40,4,6,4,Dr);
+    // Rubble rings - double rings
     for(let i=0;i<12;i++){const a=i/12*Math.PI*2,r=30;addBox(Math.cos(a)*r,1.5,Math.sin(a)*r,5,3,5,Dr);}
-    // Perimeter crater-edge barriers
+    for(let i=0;i<16;i++){const a=i/16*Math.PI*2,r=80;addBox(Math.cos(a)*r,1.5,Math.sin(a)*r,6,3,6,Dr);}
+    for(let i=0;i<12;i++){const a=i/12*Math.PI*2,r=130;addBox(Math.cos(a)*r,2,Math.sin(a)*r,8,4,8,Bk);}
+    // Crater barriers
     addBox(-22,1.5,0,2,3,20,Bk);addBox(22,1.5,0,2,3,20,Bk);addBox(0,1.5,-22,20,3,2,Bk);addBox(0,1.5,22,20,3,2,Bk);
+    addBox(-60,2,-90,2,4,40,Dr);addBox(60,2,-90,2,4,40,Dr);addBox(-60,2,90,2,4,40,Dr);addBox(60,2,90,2,4,40,Dr);
     // Spawn cover
     addBox(-25,1.5,65,8,3,4,Dr);addBox(25,1.5,65,8,3,4,Dr);
   }
@@ -1124,7 +1226,7 @@ function makeEnemy(){
 function spawnEnemy(){
   if(gameOver||!waveActive||choosingStage||showingLobby)return;
   const e=makeEnemy();let ok=false,t2=0;
-  while(!ok&&t2<40){const ang=Math.random()*Math.PI*2,d=35+Math.random()*40;const ex=Math.cos(ang)*d,ez=Math.sin(ang)*d;if(!isBlocked(ex,ez,1.5)){e.position.set(ex,0,ez);ok=true;}t2++;}
+  while(!ok&&t2<40){const ang=Math.random()*Math.PI*2,d=50+Math.random()*100;const ex=Math.cos(ang)*d,ez=Math.sin(ang)*d;if(Math.abs(ex)<LIM-5&&Math.abs(ez)<LIM-5&&!isBlocked(ex,ez,1.5)){e.position.set(ex,0,ez);ok=true;}t2++;}
   if(!ok)e.position.set(22,0,22);
   scene.add(e);enemies.push(e);
 }
@@ -1351,18 +1453,18 @@ const laserBeams=[];
 
 // ── STAGE DEFINITIONS ────────────────────────────────────────
 const STAGES=[
-  {id:1,  name:'훈련장',     sub:'TRAINING GROUND',    icon:'🏕️',  waves:3, waveBase:6,  diff:1, hpMult:0.7,  spawnBase:2200, spd:3.0,  weapons:['pistol','smg'],                                                   fogColor:0x0a1408, fogNear:35, fogFar:280, ambCol:0x5a6850, desc:'기초 훈련 구역. 기본 무기만 지급.'},
-  {id:2,  name:'도시 골목',  sub:'URBAN ALLEY',         icon:'🏘️',  waves:3, waveBase:8,  diff:1, hpMult:0.9,  spawnBase:2000, spd:3.5,  weapons:['pistol','smg','ar'],                                              fogColor:0x080c11, fogNear:30, fogFar:220, ambCol:0x606878, desc:'콘크리트 골목. 근·중거리 교전.'},
-  {id:3,  name:'산업 단지',  sub:'INDUSTRIAL ZONE',     icon:'🏭',  waves:4, waveBase:10, diff:2, hpMult:1.1,  spawnBase:1800, spd:3.8,  weapons:['pistol','smg','ar','shotgun'],                                    fogColor:0x110e06, fogNear:28, fogFar:200, ambCol:0x706050, desc:'공장 지대. 짧은 사거리 전투.'},
-  {id:4,  name:'항구',       sub:'HARBOR',              icon:'⚓',  waves:4, waveBase:12, diff:2, hpMult:1.2,  spawnBase:1700, spd:4.0,  weapons:['ar','smg','revolver','sniper'],                                   fogColor:0x060e16, fogNear:22, fogFar:170, ambCol:0x405070, desc:'안개 낀 항구. 원거리 우위.'},
-  {id:5,  name:'야간 정글',  sub:'NIGHT JUNGLE',        icon:'🌙',  waves:4, waveBase:13, diff:3, hpMult:1.4,  spawnBase:1500, spd:4.5,  weapons:['ar','shotgun','smg','sniper','dmr'],                             fogColor:0x010804, fogNear:15, fogFar:110, ambCol:0x203018, desc:'칠흑 속 정글. 시야 극히 제한.'},
-  {id:6,  name:'핵 발전소',  sub:'NUCLEAR PLANT',       icon:'☢️',  waves:4, waveBase:15, diff:3, hpMult:1.6,  spawnBase:1400, spd:4.8,  weapons:['ar','dmr','lmg','sniper','revolver'],                             fogColor:0x0a1a08, fogNear:20, fogFar:150, ambCol:0x3a6030, desc:'방사능 오염 구역. 중화기 해금.'},
-  {id:7,  name:'군사 기지',  sub:'MILITARY BASE',       icon:'🪖',  waves:5, waveBase:16, diff:4, hpMult:1.8,  spawnBase:1300, spd:5.2,  weapons:['ar','dmr','lmg','smg','sniper','shotgun','revolver'],             fogColor:0x080c11, fogNear:28, fogFar:190, ambCol:0x506070, desc:'중무장 엘리트 부대. 중화기 전투.'},
-  {id:8,  name:'폐허 도시',  sub:'RUINED CITY',         icon:'🏚️',  waves:5, waveBase:18, diff:4, hpMult:2.0,  spawnBase:1200, spd:5.5,  weapons:['ar','dmr','lmg','sniper','minigun','laser'],                      fogColor:0x120808, fogNear:22, fogFar:140, ambCol:0x704040, desc:'폐허가 된 도시. 돌아오지 못할 수도.'},
-  {id:9,  name:'요새',       sub:'FORTRESS',            icon:'🏰',  waves:5, waveBase:20, diff:4, hpMult:2.3,  spawnBase:1100, spd:5.8,  weapons:['ar','dmr','lmg','sniper','minigun','laser','crossbow'],            fogColor:0x0a0a1a, fogNear:25, fogFar:170, ambCol:0x404060, desc:'난공불락 요새. 최정예 부대가 지킨다.'},
-  {id:10, name:'극지 작전',  sub:'ARCTIC OPS',          icon:'❄️',  waves:5, waveBase:22, diff:5, hpMult:2.6,  spawnBase:1000, spd:6.2,  weapons:['sniper','lmg','minigun','dmr','laser'],                           fogColor:0x0c1820, fogNear:18, fogFar:120, ambCol:0x607080, desc:'극한 환경. 스나이퍼·중화기만 사용 가능.'},
-  {id:11, name:'지하 벙커',  sub:'UNDERGROUND BUNKER',  icon:'🕳️',  waves:6, waveBase:25, diff:5, hpMult:3.0,  spawnBase:900,  spd:6.8,  weapons:['shotgun','smg','plasma','minigun','lmg','ar','dmr','laser','crossbow'],fogColor:0x050508, fogNear:12, fogFar:95,  ambCol:0x302835, desc:'탈출구 없는 지하 벙커. 근접전 지옥.'},
-  {id:12, name:'최후의 전투',sub:'FINAL STAND',          icon:'💀',  waves:6, waveBase:30, diff:5, hpMult:3.8,  spawnBase:750,  spd:7.5,  weapons:['pistol','smg','ar','shotgun','sniper','revolver','lmg','dmr','laser','plasma','minigun','crossbow'],fogColor:0x140005, fogNear:20, fogFar:140, ambCol:0x603040, desc:'지옥의 최전선. 모든 무기. 살아남아라.'},
+  {id:1,  name:'훈련장',     sub:'TRAINING GROUND',    icon:'🏕️',  waves:3, waveBase:6,  diff:1, hpMult:0.7,  spawnBase:2200, spd:3.0,  weapons:['pistol','smg'],                                                   fogColor:0x0a1408, fogNear:60, fogFar:450, ambCol:0x5a6850, desc:'기초 훈련 구역. 기본 무기만 지급.'},
+  {id:2,  name:'도시 골목',  sub:'URBAN ALLEY',         icon:'🏘️',  waves:3, waveBase:8,  diff:1, hpMult:0.9,  spawnBase:2000, spd:3.5,  weapons:['pistol','smg','ar'],                                              fogColor:0x080c11, fogNear:50, fogFar:400, ambCol:0x606878, desc:'콘크리트 골목. 근·중거리 교전.'},
+  {id:3,  name:'산업 단지',  sub:'INDUSTRIAL ZONE',     icon:'🏭',  waves:4, waveBase:10, diff:2, hpMult:1.1,  spawnBase:1800, spd:3.8,  weapons:['pistol','smg','ar','shotgun'],                                    fogColor:0x110e06, fogNear:45, fogFar:380, ambCol:0x706050, desc:'공장 지대. 짧은 사거리 전투.'},
+  {id:4,  name:'항구',       sub:'HARBOR',              icon:'⚓',  waves:4, waveBase:12, diff:2, hpMult:1.2,  spawnBase:1700, spd:4.0,  weapons:['ar','smg','revolver','sniper'],                                   fogColor:0x060e16, fogNear:40, fogFar:350, ambCol:0x405070, desc:'안개 낀 항구. 원거리 우위.'},
+  {id:5,  name:'야간 정글',  sub:'NIGHT JUNGLE',        icon:'🌙',  waves:4, waveBase:13, diff:3, hpMult:1.4,  spawnBase:1500, spd:4.5,  weapons:['ar','shotgun','smg','sniper','dmr'],                             fogColor:0x010804, fogNear:25, fogFar:200, ambCol:0x203018, desc:'칠흑 속 정글. 시야 극히 제한.'},
+  {id:6,  name:'핵 발전소',  sub:'NUCLEAR PLANT',       icon:'☢️',  waves:4, waveBase:15, diff:3, hpMult:1.6,  spawnBase:1400, spd:4.8,  weapons:['ar','dmr','lmg','sniper','revolver'],                             fogColor:0x0a1a08, fogNear:35, fogFar:300, ambCol:0x3a6030, desc:'방사능 오염 구역. 중화기 해금.'},
+  {id:7,  name:'군사 기지',  sub:'MILITARY BASE',       icon:'🪖',  waves:5, waveBase:16, diff:4, hpMult:1.8,  spawnBase:1300, spd:5.2,  weapons:['ar','dmr','lmg','smg','sniper','shotgun','revolver'],             fogColor:0x080c11, fogNear:45, fogFar:380, ambCol:0x506070, desc:'중무장 엘리트 부대. 중화기 전투.'},
+  {id:8,  name:'폐허 도시',  sub:'RUINED CITY',         icon:'🏚️',  waves:5, waveBase:18, diff:4, hpMult:2.0,  spawnBase:1200, spd:5.5,  weapons:['ar','dmr','lmg','sniper','minigun','laser'],                      fogColor:0x120808, fogNear:35, fogFar:280, ambCol:0x704040, desc:'폐허가 된 도시. 돌아오지 못할 수도.'},
+  {id:9,  name:'요새',       sub:'FORTRESS',            icon:'🏰',  waves:5, waveBase:20, diff:4, hpMult:2.3,  spawnBase:1100, spd:5.8,  weapons:['ar','dmr','lmg','sniper','minigun','laser','crossbow'],            fogColor:0x0a0a1a, fogNear:40, fogFar:340, ambCol:0x404060, desc:'난공불락 요새. 최정예 부대가 지킨다.'},
+  {id:10, name:'극지 작전',  sub:'ARCTIC OPS',          icon:'❄️',  waves:5, waveBase:22, diff:5, hpMult:2.6,  spawnBase:1000, spd:6.2,  weapons:['sniper','lmg','minigun','dmr','laser'],                           fogColor:0x0c1820, fogNear:30, fogFar:250, ambCol:0x607080, desc:'극한 환경. 스나이퍼·중화기만 사용 가능.'},
+  {id:11, name:'지하 벙커',  sub:'UNDERGROUND BUNKER',  icon:'🕳️',  waves:6, waveBase:25, diff:5, hpMult:3.0,  spawnBase:900,  spd:6.8,  weapons:['shotgun','smg','plasma','minigun','lmg','ar','dmr','laser','crossbow'],fogColor:0x050508, fogNear:20, fogFar:180, ambCol:0x302835, desc:'탈출구 없는 지하 벙커. 근접전 지옥.'},
+  {id:12, name:'최후의 전투',sub:'FINAL STAND',          icon:'💀',  waves:6, waveBase:30, diff:5, hpMult:3.8,  spawnBase:750,  spd:7.5,  weapons:['pistol','smg','ar','shotgun','sniper','revolver','lmg','dmr','laser','plasma','minigun','crossbow'],fogColor:0x140005, fogNear:35, fogFar:280, ambCol:0x603040, desc:'지옥의 최전선. 모든 무기. 살아남아라.'},
 ];
 let currentStageId=1,stageWaveNum=1;
 // Persistent save via localStorage
