@@ -125,7 +125,7 @@ body{overflow:hidden;background:#000;font-family:'Courier New',monospace}
 #btn-aim.active{background:rgba(0,150,255,0.45);border-color:rgba(0,180,255,0.8)}
 #btn-reload{bottom:130px;right:120px;width:52px;height:52px;background:rgba(255,200,0,0.15);border:2px solid rgba(255,200,0,0.35);font-size:10px}
 #btn-reload.active{background:rgba(255,200,0,0.4)}
-#btn-jump{bottom:30px;left:160px;width:56px;height:56px;background:rgba(0,255,100,0.15);border:2px solid rgba(0,255,100,0.3);font-size:10px}
+#btn-jump{bottom:30px;right:120px;width:56px;height:56px;background:rgba(0,255,100,0.15);border:2px solid rgba(0,255,100,0.3);font-size:10px}
 #btn-jump.active{background:rgba(0,255,100,0.4)}
 #btn-prev-wep,#btn-next-wep{bottom:200px;width:44px;height:44px;background:rgba(255,255,255,0.08);border:2px solid rgba(255,255,255,0.2);font-size:16px}
 #btn-prev-wep{right:120px}
@@ -1428,7 +1428,7 @@ if(isMobile){
         const dx=t.clientX-lookLastX, dy=t.clientY-lookLastY;
         lookLastX=t.clientX;lookLastY=t.clientY;
         if(!mobileActive||gameOver)return;
-        mobileYaw-=dx*lookSens;
+        mobileYaw+=dx*lookSens;
         mobilePitch+=dy*lookSens;
         mobilePitch=Math.max(-Math.PI/2+0.01,Math.min(Math.PI/2-0.01,mobilePitch));
         yawObj.rotation.y=mobileYaw;
