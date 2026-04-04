@@ -107,6 +107,7 @@ body{overflow:hidden;background:#000;font-family:'Courier New',monospace}
 .skin-item .slocked{position:absolute;top:2px;right:2px;font-size:8px}
 #skin-panel .sclose{display:block;margin:14px auto 0;background:rgba(0,255,100,0.15);border:1px solid rgba(0,255,100,0.4);color:#00ff88;font-family:'Courier New',monospace;font-size:11px;padding:6px 20px;cursor:pointer;letter-spacing:1px}
 #skin-btn{display:block}
+#menu-btn{position:absolute;top:100px;right:18px;z-index:14;pointer-events:auto;background:rgba(0,0,0,0.5);border:1px solid rgba(255,255,255,0.2);color:#aaa;font-family:'Courier New',monospace;font-size:10px;letter-spacing:1px;padding:4px 12px;cursor:pointer}
 /* Landscape prompt overlay */
 #rotate-msg{display:none;position:fixed;inset:0;z-index:9999;background:#000;color:#fff;flex-direction:column;align-items:center;justify-content:center;font-family:'Courier New',monospace;text-align:center}
 #rotate-msg .icon{font-size:60px;margin-bottom:18px;animation:rotSpin 1.5s ease-in-out infinite}
@@ -212,6 +213,7 @@ body{overflow:hidden;background:#000;font-family:'Courier New',monospace}
   <!-- Magnification label -->
   <div style="position:absolute;top:calc(50% + 178px);left:50%;transform:translateX(-50%);font-family:'Courier New',monospace;font-size:11px;color:rgba(0,200,80,0.5);letter-spacing:2px;">8x</div>
 </div>
+<div id="menu-btn">MENU</div>
 <div id="sens-btn">SENS</div>
 <div id="skin-btn">SKIN</div>
 <div id="skin-panel">
@@ -1490,14 +1492,23 @@ function startStage(sid){
   // disable unavailable weapons, switch to first available if current not allowed
   if(!stW.includes(wKey)){switchWep(stW[0]);}
   updateWaveHUD();
-  yawObj.position.set(0,EYH,60);camera.rotation.set(0,0,0);camera.fov=75;camera.updateProjectionMatrix();
+  // Find safe spawn position
+  let spX=0,spZ=60;
+  if(isBlocked(spX,spZ,PR)){
+    let found=false;
+    for(let r=5;r<100&&!found;r+=5){for(let a=0;a<8&&!found;a++){
+      const tx=spX+Math.cos(a/8*Math.PI*2)*r,tz=spZ+Math.sin(a/8*Math.PI*2)*r;
+      if(!isBlocked(tx,tz,PR)&&Math.abs(tx)<LIM-5&&Math.abs(tz)<LIM-5){spX=tx;spZ=tz;found=true;}
+    }}
+  }
+  yawObj.position.set(spX,EYH,spZ);camera.rotation.set(0,0,0);camera.fov=75;camera.updateProjectionMatrix();
   gunGrp.position.set(0.24,-0.24,-0.50);gunGrp.rotation.set(0,0,0);
   rebuildGun(stW.includes(wKey)?wKey:stW[0]);updateUI();updateWBar();
   mouseDown=false;aiming=false;gunGrp.visible=true;
   const scopeEl=document.getElementById('scope-overlay');
   if(scopeEl) scopeEl.style.display='none';
   xhEl.style.display='block';xhEl.classList.remove('ads');
-  spawnBuffItem(0,0.6,40,'heal');spawnBuffItem(-50,0.6,0,'heal');spawnBuffItem(50,0.6,0,'heal');
+  spawnBuffItem(spX,0.6,spZ-20,'heal');spawnBuffItem(spX-50,0.6,spZ-60,'heal');spawnBuffItem(spX+50,0.6,spZ-60,'heal');
   spawnBuffItem(0,0.6,-50,'speed');spawnBuffItem(-50,0.6,50,'speed');
   spawnBuffItem(50,0.6,-50,'ammo');spawnBuffItem(-20,0.6,-20,'ammo');
   spawnBuffItem(20,0.6,20,'dmg');spawnBuffItem(-60,0.6,-60,'dmg');spawnBuffItem(60,0.6,60,'dmg');
@@ -1699,13 +1710,22 @@ document.addEventListener('mouseup',e=>{
   if(e.button===0)mouseDown=false;
   if(e.button===2)aiming=false;
 });
+function goToMenu(){
+  if(showingLobby||choosingStage)return;
+  clearAll();if(spawnInterval){clearInterval(spawnInterval);spawnInterval=null;}
+  mobileActive=false;ctrl.unlock();
+  showStageLobby(false);
+}
 document.addEventListener('keydown',e=>{
+  if(e.code==='Escape'){goToMenu();return;}
   if(e.code==='KeyW')mF=true;if(e.code==='KeyS')mB=true;if(e.code==='KeyA')mL=true;if(e.code==='KeyD')mR=true;
   if(e.code==='KeyR')startReload();
   if(e.code==='Space'&&onGnd&&ctrl.isLocked&&!gameOver){yVel=JUMP*mods.jumpMult;onGnd=false;}
   const mp={Digit1:'pistol',Digit2:'smg',Digit3:'ar',Digit4:'shotgun',Digit5:'sniper',Digit6:'revolver',Digit7:'lmg',Digit8:'dmr',Digit9:'laser',Digit0:'plasma',KeyQ:'minigun',KeyE:'crossbow'};
   if(mp[e.code]&&getCurStage().weapons.includes(mp[e.code]))switchWep(mp[e.code]);
 });
+// Mobile menu button
+document.getElementById('menu-btn').addEventListener('click',goToMenu);
 document.addEventListener('keyup',e=>{if(e.code==='KeyW')mF=false;if(e.code==='KeyS')mB=false;if(e.code==='KeyA')mL=false;if(e.code==='KeyD')mR=false;});
 document.addEventListener('wheel',e=>{
   if(!ctrl.isLocked||gameOver||choosingStage)return;
