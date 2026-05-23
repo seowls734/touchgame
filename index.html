@@ -184,32 +184,34 @@ body{overflow:hidden;background:#000;font-family:'Courier New',monospace}
 /* 클래스 선택 오버레이 */
 #class-select{
   display:none;position:absolute;inset:0;z-index:36;
-  background:rgba(0,0,0,0.96);align-items:center;justify-content:center;flex-direction:column;
+  background:rgba(0,0,0,0.96);align-items:center;justify-content:flex-start;flex-direction:column;
+  overflow-y:auto;padding:18px 16px 16px;
 }
 #class-select.active{display:flex;}
-#class-select h2{font-size:28px;letter-spacing:6px;color:#00ff88;margin-bottom:6px;font-family:'Courier New',monospace;}
-#class-select .csub{font-size:12px;color:#555;letter-spacing:2px;margin-bottom:30px;font-family:'Courier New',monospace;}
-#class-cards{display:flex;gap:16px;flex-wrap:wrap;justify-content:center;max-width:900px;}
+#class-select h2{font-size:22px;letter-spacing:5px;color:#00ff88;margin-bottom:4px;font-family:'Courier New',monospace;}
+#class-select .csub{font-size:11px;color:#555;letter-spacing:2px;margin-bottom:16px;font-family:'Courier New',monospace;}
+#class-cards{display:grid;grid-template-columns:repeat(5,150px);gap:8px;justify-content:center;}
 .class-card{
-  width:200px;background:rgba(8,16,24,0.98);
-  border:1px solid rgba(0,255,80,0.2);padding:24px 18px 20px;
+  background:rgba(8,16,24,0.98);
+  border:1px solid rgba(0,255,80,0.2);padding:10px 8px 8px;
   text-align:center;font-family:'Courier New',monospace;
-  cursor:pointer;transition:all 0.18s;position:relative;
+  cursor:pointer;transition:all 0.15s;position:relative;
 }
-.class-card:hover{border-color:rgba(0,255,140,0.8);background:rgba(0,35,18,0.98);transform:translateY(-4px);box-shadow:0 0 28px rgba(0,255,80,0.18);}
+.class-card:hover{border-color:rgba(0,255,140,0.8);background:rgba(0,35,18,0.98);transform:translateY(-2px);box-shadow:0 0 14px rgba(0,255,80,0.18);}
 .class-card.selected{border-color:#00ff88;background:rgba(0,40,20,0.98);}
-.class-card .cc-icon{font-size:40px;display:block;margin-bottom:12px;}
-.class-card .cc-name{font-size:15px;color:#fff;font-weight:bold;letter-spacing:1px;margin-bottom:10px;}
-.class-card .cc-skills{text-align:left;margin-top:8px;}
-.class-card .cc-skill{font-size:10px;color:#777;line-height:1.8;padding:2px 0;border-bottom:1px solid rgba(255,255,255,0.05);}
+.class-card .cc-icon{font-size:24px;display:block;margin-bottom:4px;}
+.class-card .cc-name{font-size:11px;color:#fff;font-weight:bold;letter-spacing:1px;margin-bottom:4px;}
+.class-card .cc-skills{text-align:left;margin-top:2px;}
+.class-card .cc-skill{font-size:8px;color:#888;line-height:1.4;padding:1px 0;border-bottom:1px solid rgba(255,255,255,0.05);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .class-card .cc-skill span{color:#00cc66;font-weight:bold;}
 #class-select .cs-btn{
-  margin-top:24px;padding:10px 32px;
-  background:rgba(0,255,100,0.15);border:1px solid rgba(0,255,100,0.5);
+  margin:16px auto 8px;padding:10px 36px;
+  background:rgba(0,255,100,0.18);border:1px solid rgba(0,255,100,0.6);
   color:#00ff88;font-family:'Courier New',monospace;font-size:13px;
   letter-spacing:2px;cursor:pointer;transition:all 0.15s;
+  position:sticky;bottom:8px;z-index:2;
 }
-#class-select .cs-btn:hover{background:rgba(0,255,100,0.3);}
+#class-select .cs-btn:hover{background:rgba(0,255,100,0.35);}
 /* 스킬 발동 알림 */
 #skill-notify{
   position:absolute;top:38%;left:50%;transform:translate(-50%,-50%);
@@ -1499,14 +1501,15 @@ function showClassSelect(sid){
   CLASSES.forEach(cls=>{
     const card=document.createElement('div');
     card.className='class-card'+(currentClass&&currentClass.id===cls.id?' selected':'');
+    const esc=s=>String(s).replace(/"/g,'&quot;');
+    card.title=cls.name+' — '+cls.desc+'\n\nC: '+cls.skills.c.name+' ('+cls.skills.c.cd+'s) — '+cls.skills.c.desc+'\nE: '+cls.skills.e.name+' ('+cls.skills.e.cd+'s) — '+cls.skills.e.desc+'\nQ: '+cls.skills.q.name+' ('+cls.skills.q.cd+'s) — '+cls.skills.q.desc;
     card.innerHTML=
       '<span class="cc-icon">'+cls.icon+'</span>'+
       '<div class="cc-name">'+cls.name+'</div>'+
-      '<div style="font-size:10px;color:#555;margin-bottom:10px;font-family:\'Courier New\',monospace;">'+cls.desc+'</div>'+
       '<div class="cc-skills">'+
-      '<div class="cc-skill"><span>C</span> '+cls.skills.c.icon+' '+cls.skills.c.name+' ('+cls.skills.c.cd+'s) — '+cls.skills.c.desc+'</div>'+
-      '<div class="cc-skill"><span>E</span> '+cls.skills.e.icon+' '+cls.skills.e.name+' ('+cls.skills.e.cd+'s) — '+cls.skills.e.desc+'</div>'+
-      '<div class="cc-skill"><span>Q</span> '+cls.skills.q.icon+' '+cls.skills.q.name+' ('+cls.skills.q.cd+'s) — '+cls.skills.q.desc+'</div>'+
+      '<div class="cc-skill" title="'+esc(cls.skills.c.desc)+'"><span>C</span> '+cls.skills.c.icon+' '+cls.skills.c.name+'</div>'+
+      '<div class="cc-skill" title="'+esc(cls.skills.e.desc)+'"><span>E</span> '+cls.skills.e.icon+' '+cls.skills.e.name+'</div>'+
+      '<div class="cc-skill" title="'+esc(cls.skills.q.desc)+'"><span>Q</span> '+cls.skills.q.icon+' '+cls.skills.q.name+'</div>'+
       '</div>';
     card.addEventListener('click',()=>{
       currentClass=cls;
