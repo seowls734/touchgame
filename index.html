@@ -686,12 +686,12 @@ const CLASSES=[
            showSkillNotify('🛡️ 방어막!');
            setTimeout(()=>{mods.armorMult=old;},5000);
          }},
-      q:{name:'광전사', icon:'😤', cd:25, desc:'8초간 피해 3배, 연사속도 2배, HP 지속 회복',
+      q:{name:'광전사', icon:'😤', cd:25, desc:'7초간 피해 2.5배, 연사속도 1.6배, HP 지속 회복',
          fn:()=>{
-           mods.dmgMult*=3;mods.fireRateMult*=0.5;mods.regenRate+=8;
+           mods.dmgMult*=2.5;mods.fireRateMult*=0.625;mods.regenRate+=6;
            spawnSkillFX(0xff2200,20);
            showSkillNotify('😤 광전사!');
-           setTimeout(()=>{mods.dmgMult/=3;mods.fireRateMult/=0.5;mods.regenRate-=8;},8000);
+           setTimeout(()=>{mods.dmgMult/=2.5;mods.fireRateMult/=0.625;mods.regenRate-=6;},7000);
          }},
     }
   },
@@ -802,11 +802,14 @@ const CLASSES=[
            mods._cloaked=true;spawnSkillFX(0x888888,16);showSkillNotify('💨 연막!');
            setTimeout(()=>{mods._cloaked=false;},5000);
          }},
-      q:{name:'암살', icon:'🗡️', cd:20, desc:'가장 가까운 적 즉사',
+      q:{name:'암살', icon:'🗡️', cd:20, desc:'가장 가까운 적 HP 80% 제거',
          fn:()=>{
-           let closest=null,closestDist=20;
+           let closest=null,closestDist=22;
            for(const e of enemies){const d=yawObj.position.distanceTo(e.position);if(d<closestDist){closestDist=d;closest=e;}}
-           if(closest){spawnFX(closest.position.clone());_lastKilledEnemy=closest;scene.remove(closest);const idx=enemies.indexOf(closest);if(idx>=0){enemies.splice(idx,1);onKill();}}
+           if(closest){
+             closest.userData.hp-=closest.userData.maxHP*0.8*mods.dmgMult;closest.userData.flashT=0.4;
+             if(closest.userData.hp<=0){spawnFX(closest.position.clone());_lastKilledEnemy=closest;scene.remove(closest);const idx=enemies.indexOf(closest);if(idx>=0){enemies.splice(idx,1);onKill();}}
+           }
            spawnSkillFX(0xaa00ff,20);showSkillNotify('🗡️ 암살!');
          }},
     }
@@ -879,11 +882,12 @@ const CLASSES=[
            spawnSkillFX(0x00ffff,12);showSkillNotify('🔋 실드 충전!');
            setTimeout(()=>{mods.armorMult=old;},5000);
          }},
-      q:{name:'핵 펄스', icon:'☢️', cd:28, desc:'14m 이내 모든 적 즉사',
+      q:{name:'핵 펄스', icon:'☢️', cd:28, desc:'12m 내 적에게 200 피해 (보스 생존 가능)',
          fn:()=>{
            for(let j=enemies.length-1;j>=0;j--){
-             if(yawObj.position.distanceTo(enemies[j].position)<14){
-               spawnFX(enemies[j].position.clone());_lastKilledEnemy=enemies[j];scene.remove(enemies[j]);enemies.splice(j,1);onKill();
+             if(yawObj.position.distanceTo(enemies[j].position)<12){
+               enemies[j].userData.hp-=200*mods.dmgMult;enemies[j].userData.flashT=0.3;
+               if(enemies[j].userData.hp<=0){spawnFX(enemies[j].position.clone());_lastKilledEnemy=enemies[j];scene.remove(enemies[j]);enemies.splice(j,1);onKill();}
              }
            }
            spawnSkillFX(0x00ffff,25);showSkillNotify('☢️ 핵 펄스!');
@@ -895,15 +899,14 @@ const CLASSES=[
     id:'hunter', name:'사냥꾼', icon:'🏹',
     desc:'표식과 화살로 적을 추적.',
     skills:{
-      c:{name:'표식', icon:'🎯', cd:5, desc:'가장 가까운 적 — 30초간 받는 피해 2배',
+      c:{name:'표식', icon:'🎯', cd:5, desc:'가장 가까운 적 — HP 30% 제거',
          fn:()=>{
            let closest=null,closestDist=60;
            for(const e of enemies){const d=yawObj.position.distanceTo(e.position);if(d<closestDist){closestDist=d;closest=e;}}
            if(closest){
-             closest.userData._marked=true;
-             // 표식된 적에게 피해 2배 적용을 위해 maxHP 임시 조정 대신 hp를 절반으로
-             closest.userData.hp=closest.userData.hp*0.5;
+             closest.userData.hp-=closest.userData.maxHP*0.3*mods.dmgMult;
              closest.userData.flashT=0.4;
+             if(closest.userData.hp<=0){spawnFX(closest.position.clone());_lastKilledEnemy=closest;scene.remove(closest);const idx=enemies.indexOf(closest);if(idx>=0){enemies.splice(idx,1);onKill();}}
              spawnSkillFX(0xff4444,8,closest.position);
            }
            showSkillNotify('🎯 표식!');
@@ -1171,23 +1174,227 @@ const CLASSES=[
            }
            showSkillNotify('🧨 C4 부착 — 2초!');
          }},
-      q:{name:'공습', icon:'✈️', cd:30, desc:'15m 범위 내에 6연속 폭격',
+      q:{name:'공습', icon:'✈️', cd:30, desc:'15m 범위 내에 5연속 폭격',
          fn:()=>{
            const cp=yawObj.position.clone();
-           for(let i=0;i<6;i++){
+           for(let i=0;i<5;i++){
              setTimeout(()=>{
                const ang=Math.random()*Math.PI*2,r=Math.random()*15;
                const lp=new THREE.Vector3(cp.x+Math.cos(ang)*r,0.5,cp.z+Math.sin(ang)*r);
                spawnExplosionFX(lp);
                for(let j=enemies.length-1;j>=0;j--){
                  if(enemies[j].position.distanceTo(lp)<6){
-                   enemies[j].userData.hp-=50*mods.dmgMult;enemies[j].userData.flashT=0.3;
+                   enemies[j].userData.hp-=45*mods.dmgMult;enemies[j].userData.flashT=0.3;
                    if(enemies[j].userData.hp<=0){spawnFX(enemies[j].position.clone());_lastKilledEnemy=enemies[j];scene.remove(enemies[j]);enemies.splice(j,1);onKill();}
                  }
                }
              },i*350);
            }
            spawnSkillFX(0xff8800,25);showSkillNotify('✈️ 공습!');
+         }},
+    }
+  },
+  // ── 13. 검호 ──────────────────────────────────────
+  {
+    id:'sword', name:'검호', icon:'⚔️',
+    desc:'칼날의 달인. 근접 + 회피.',
+    skills:{
+      c:{name:'검기', icon:'🗡️', cd:4, desc:'전방 직선 8m — 적에 80 피해',
+         fn:()=>{
+           const dir=new THREE.Vector3();camera.getWorldDirection(dir);
+           const origin=yawObj.position.clone();
+           for(let j=enemies.length-1;j>=0;j--){
+             const e=enemies[j];
+             const dx=e.position.x-origin.x,dz=e.position.z-origin.z;
+             const denom=dir.x*dir.x+dir.z*dir.z;if(denom<0.001)continue;
+             const t2=(dx*dir.x+dz*dir.z)/denom;if(t2<0||t2>8)continue;
+             const cx=origin.x+dir.x*t2,cz=origin.z+dir.z*t2;
+             if(Math.sqrt((cx-e.position.x)**2+(cz-e.position.z)**2)>1.6)continue;
+             e.userData.hp-=80*mods.dmgMult;e.userData.flashT=0.25;
+             if(e.userData.hp<=0){spawnFX(e.position.clone());_lastKilledEnemy=e;scene.remove(e);enemies.splice(j,1);onKill();}
+           }
+           spawnSkillFX(0xccffff,15,origin.clone().addScaledVector(dir,4));
+           showSkillNotify('🗡️ 검기!');
+         }},
+      e:{name:'회피', icon:'💨', cd:10, desc:'1초 무적 + 2.5초간 속도 1.8배',
+         fn:()=>{
+           const old=mods.armorMult;mods.armorMult=0;mods.speedMult*=1.8;
+           spawnSkillFX(0xaaaaff,12);showSkillNotify('💨 회피!');
+           setTimeout(()=>{mods.armorMult=old;},1000);
+           setTimeout(()=>{mods.speedMult/=1.8;},2500);
+         }},
+      q:{name:'무한검극', icon:'⚔️', cd:22, desc:'6초간 0.4초마다 주변 8m 적에 35 피해',
+         fn:()=>{
+           let elapsed=0;
+           const iv=setInterval(()=>{
+             elapsed+=0.4;
+             const cp=yawObj.position;
+             let hit=false;
+             for(let j=enemies.length-1;j>=0;j--){
+               const e=enemies[j];
+               const dx=cp.x-e.position.x,dz=cp.z-e.position.z;
+               if(dx*dx+dz*dz<64){
+                 e.userData.hp-=35*mods.dmgMult;e.userData.flashT=0.15;hit=true;
+                 if(e.userData.hp<=0){spawnFX(e.position.clone());_lastKilledEnemy=e;scene.remove(e);enemies.splice(j,1);onKill();}
+               }
+             }
+             if(hit)spawnSkillFX(0xccffff,4,cp.clone().setY(1.5));
+             if(elapsed>=6)clearInterval(iv);
+           },400);
+           spawnSkillFX(0xccffff,25);showSkillNotify('⚔️ 무한검극!');
+         }},
+    }
+  },
+  // ── 14. 원소술사 ────────────────────────────────
+  {
+    id:'mage', name:'원소술사', icon:'🔮',
+    desc:'원소의 힘으로 광역 섬멸.',
+    skills:{
+      c:{name:'화염구', icon:'🔥', cd:5, desc:'화염구 발사 — 폭발 7m, 50 피해',
+         fn:()=>{
+           const dir=new THREE.Vector3();camera.getWorldDirection(dir);
+           const start=camera.position.clone();
+           const ball=new THREE.Mesh(new THREE.SphereGeometry(0.35,10,10),new THREE.MeshBasicMaterial({color:0xff4400}));
+           ball.position.copy(start);
+           const pl=new THREE.PointLight(0xff5500,4,8,2);ball.add(pl);
+           scene.add(ball);
+           let elapsed=0;
+           const iv=setInterval(()=>{
+             elapsed+=0.03;
+             ball.position.addScaledVector(dir,40*0.03);
+             let exp=false;
+             for(const e of enemies){if(ball.position.distanceTo(e.position)<2.0){exp=true;break;}}
+             if(isBlocked(ball.position.x,ball.position.z,0.1,ball.position.y,ball.position.y))exp=true;
+             if(elapsed>=1.5)exp=true;
+             if(exp){
+               clearInterval(iv);
+               const ep=ball.position.clone();scene.remove(ball);
+               spawnExplosionFX(ep);
+               for(let j=enemies.length-1;j>=0;j--){
+                 if(enemies[j].position.distanceTo(ep)<7){
+                   enemies[j].userData.hp-=50*mods.dmgMult;enemies[j].userData.flashT=0.3;
+                   if(enemies[j].userData.hp<=0){spawnFX(enemies[j].position.clone());_lastKilledEnemy=enemies[j];scene.remove(enemies[j]);enemies.splice(j,1);onKill();}
+                 }
+               }
+             }
+           },30);
+           showSkillNotify('🔥 화염구!');
+         }},
+      e:{name:'얼음폭풍', icon:'❄️', cd:12, desc:'12m 내 적 5초간 80% 감속',
+         fn:()=>{
+           const cp=yawObj.position;
+           for(const e of enemies){
+             const dx=cp.x-e.position.x,dz=cp.z-e.position.z;
+             if(dx*dx+dz*dz<144){
+               e.userData._origSpd=e.userData._origSpd||e.userData.spdMult;
+               e.userData.spdMult=e.userData._origSpd*0.2;
+               e.userData.flashT=0.3;
+             }
+           }
+           setTimeout(()=>{
+             for(const e of enemies){if(e.userData._origSpd){e.userData.spdMult=e.userData._origSpd;}}
+           },5000);
+           spawnSkillFX(0x88ddff,25);showSkillNotify('❄️ 얼음폭풍!');
+         }},
+      q:{name:'번개폭풍', icon:'⚡', cd:25, desc:'18m 내 적에 번개 8회 (각 30 피해)',
+         fn:()=>{
+           const cp=yawObj.position.clone();
+           for(let i=0;i<8;i++){
+             setTimeout(()=>{
+               const cands=enemies.filter(e=>cp.distanceTo(e.position)<18);
+               if(cands.length===0)return;
+               const targ=cands[Math.floor(Math.random()*cands.length)];
+               targ.userData.hp-=30*mods.dmgMult;targ.userData.flashT=0.25;
+               spawnSkillFX(0xeeeeff,8,targ.position.clone().setY(3));
+               // 번개 시각 효과 (수직 빔)
+               const lb=new THREE.Mesh(new THREE.CylinderGeometry(0.05,0.05,8,5),new THREE.MeshBasicMaterial({color:0xeeeeff,transparent:true,opacity:0.9}));
+               lb.position.copy(targ.position);lb.position.y=4;scene.add(lb);
+               setTimeout(()=>{scene.remove(lb);lb.geometry.dispose();lb.material.dispose();},150);
+               if(targ.userData.hp<=0){spawnFX(targ.position.clone());_lastKilledEnemy=targ;const idx=enemies.indexOf(targ);if(idx>=0){scene.remove(targ);enemies.splice(idx,1);onKill();}}
+             },i*200);
+           }
+           spawnSkillFX(0xeeeeff,30);showSkillNotify('⚡ 번개폭풍!');
+         }},
+    }
+  },
+  // ── 15. 시간술사 ────────────────────────────────
+  {
+    id:'chrono', name:'시간술사', icon:'⏰',
+    desc:'시간을 조작해 전장을 지배.',
+    skills:{
+      c:{name:'시간정지', icon:'⏸️', cd:14, desc:'3초간 모든 적 정지 (총알 포함)',
+         fn:()=>{
+           mods._timeStop=true;
+           spawnSkillFX(0xddddff,30);showSkillNotify('⏸️ 시간정지!');
+           setTimeout(()=>{mods._timeStop=false;showSkillNotify('▶️ 시간 복구');},3000);
+         }},
+      e:{name:'시간역행', icon:'🔄', cd:15, desc:'즉시 HP +60 + 2초 무적',
+         fn:()=>{
+           playerHP=Math.min(playerHP+60,100);hpBar.style.width=playerHP+'%';
+           const old=mods.armorMult;mods.armorMult=0;
+           spawnSkillFX(0x88ffcc,20);showSkillNotify('🔄 시간역행!');
+           setTimeout(()=>{mods.armorMult=old;},2000);
+         }},
+      q:{name:'시간가속', icon:'⏩', cd:28, desc:'8초간 연사/이동/재장전 2배',
+         fn:()=>{
+           mods.fireRateMult*=0.5;mods.speedMult*=2;
+           spawnSkillFX(0xffcc88,25);showSkillNotify('⏩ 시간가속!');
+           setTimeout(()=>{mods.fireRateMult/=0.5;mods.speedMult/=2;},8000);
+         }},
+    }
+  },
+  // ── 16. 정신술사 ────────────────────────────────
+  {
+    id:'psion', name:'정신술사', icon:'🧠',
+    desc:'정신력으로 적을 제압.',
+    skills:{
+      c:{name:'정신충격', icon:'💫', cd:6, desc:'전방 15m 부채꼴 — 적 4초 감속+혼란',
+         fn:()=>{
+           const dir=new THREE.Vector3();camera.getWorldDirection(dir);
+           const origin=yawObj.position.clone();
+           for(const e of enemies){
+             const dx=e.position.x-origin.x,dz=e.position.z-origin.z;
+             const d=Math.sqrt(dx*dx+dz*dz);
+             if(d>15)continue;
+             // 부채꼴 — 정면 dot product
+             const ndx=dx/d,ndz=dz/d;
+             const fdot=ndx*dir.x+ndz*dir.z;
+             if(fdot<0.5)continue; // ~60도 부채꼴
+             e.userData._origSpd=e.userData._origSpd||e.userData.spdMult;
+             e.userData.spdMult=e.userData._origSpd*0.25;
+             e.userData.flashT=0.4;
+           }
+           setTimeout(()=>{
+             for(const e of enemies){if(e.userData._origSpd){e.userData.spdMult=e.userData._origSpd;}}
+           },4000);
+           spawnSkillFX(0xff88ff,20);showSkillNotify('💫 정신충격!');
+         }},
+      e:{name:'텔레키네시스', icon:'✊', cd:12, desc:'가장 가까운 적을 들어 던지기 (60 피해)',
+         fn:()=>{
+           let closest=null,closestDist=18;
+           for(const e of enemies){const d=yawObj.position.distanceTo(e.position);if(d<closestDist){closestDist=d;closest=e;}}
+           if(closest){
+             closest.userData.hp-=60*mods.dmgMult;closest.userData.flashT=0.5;
+             // 멀리 던지기
+             const dir=new THREE.Vector3();camera.getWorldDirection(dir);
+             closest.position.x+=dir.x*6;closest.position.z+=dir.z*6;
+             spawnSkillFX(0xff88ff,15,closest.position.clone().setY(3));
+             if(closest.userData.hp<=0){spawnFX(closest.position.clone());_lastKilledEnemy=closest;scene.remove(closest);const idx=enemies.indexOf(closest);if(idx>=0){enemies.splice(idx,1);onKill();}}
+           }
+           showSkillNotify('✊ 텔레키네시스!');
+         }},
+      q:{name:'정신폭발', icon:'🧠', cd:25, desc:'18m 내 모든 적 현재 HP 50% 제거',
+         fn:()=>{
+           const cp=yawObj.position;
+           for(let j=enemies.length-1;j>=0;j--){
+             const e=enemies[j];
+             const dx=cp.x-e.position.x,dz=cp.z-e.position.z;
+             if(dx*dx+dz*dz<324){
+               e.userData.hp*=0.5;e.userData.flashT=0.4;
+               if(e.userData.hp<=0){spawnFX(e.position.clone());_lastKilledEnemy=e;scene.remove(e);enemies.splice(j,1);onKill();}
+             }
+           }
+           spawnSkillFX(0xff44ff,30);showSkillNotify('🧠 정신폭발!');
          }},
     }
   },
@@ -3522,6 +3729,8 @@ function spawnEnemyBullet(from,to,speed,damage,color,size,isSplash){
 }
 
 function updateEnemyBullets(dt){
+  // 시간정지 — 발사체도 정지
+  if(mods._timeStop)return;
   const ppos=yawObj.position;
   for(let i=enemyBullets.length-1;i>=0;i--){
     const b=enemyBullets[i];
@@ -4373,7 +4582,14 @@ function updateEnemies(dt){
     const espd=baseSpd*(ud.spdMult||1);
     const behavior=ud.behavior||'melee';
     const desiredRange=ud.range||0;
-    if(ud.atkCd>0)ud.atkCd-=dt;
+    if(ud.atkCd>0&&!mods._timeStop)ud.atkCd-=dt;
+
+    // ── 시간정지 — 이동/공격/접촉피해 모두 정지, 시각 효과는 유지 ──
+    if(mods._timeStop){
+      e.lookAt(camera.position.x,2.2,camera.position.z);
+      if(ud.flashT>0){ud.flashT-=dt;const t2=Math.max(0,ud.flashT/0.15);ud.bm.color.setRGB(1,t2*0.35,t2*0.35);if(ud.am)ud.am.color.setRGB(0.9+t2*0.1,t2*0.3,t2*0.3);}
+      continue;
+    }
 
     // ── 이동 ──
     if(!mods._cloaked){
