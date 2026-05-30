@@ -4491,10 +4491,13 @@ function goToMenu(){
   saveProg();clearAll();if(spawnInterval){clearInterval(spawnInterval);spawnInterval=null;}spawnWasStopped=false;
   mobileActive=false;ctrl.unlock();showStageLobby(false);
 }
+const _gameKeys=new Set(['KeyW','KeyS','KeyA','KeyD','KeyR','KeyC','KeyE','KeyQ','Space','ControlLeft','ControlRight','Digit1','Digit2','Digit3','Digit4','Digit5','Digit6','Digit7','Digit8','Digit9','Digit0']);
 document.addEventListener('keydown',e=>{
   if(e.code==='Escape'){goToMenu();return;}
+  // 플레이 중에는 게임키와 Ctrl 조합(Ctrl+A 전체선택 등)의 브라우저 기본 동작을 차단
+  if((ctrl.isLocked||mobileActive)&&(e.ctrlKey||_gameKeys.has(e.code)))e.preventDefault();
   if(e.code==='KeyW')mF=true;if(e.code==='KeyS')mB=true;if(e.code==='KeyA')mL=true;if(e.code==='KeyD')mR=true;
-  if(e.code==='ControlLeft'||e.code==='ControlRight'){crouching=true;e.preventDefault();}
+  if(e.code==='ControlLeft'||e.code==='ControlRight')crouching=true;
   if(e.code==='KeyR')startReload();
   if(e.code==='KeyC'&&ctrl.isLocked&&!gameOver)useSkill('c');
   if(e.code==='KeyE'&&ctrl.isLocked&&!gameOver){
