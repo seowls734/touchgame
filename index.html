@@ -441,6 +441,16 @@ const _geoCache={
   ring06:new THREE.TorusGeometry(1,0.6,6,28),
   ring08:new THREE.TorusGeometry(1,0.8,6,32),
   ring015:new THREE.TorusGeometry(1,0.15,6,32),
+  ringThin:new THREE.TorusGeometry(1,0.06,4,28),
+  ringFlat:new THREE.RingGeometry(0.85,1,32),
+  ringFlatThick:new THREE.RingGeometry(0.7,1,32),
+  slashPlane:new THREE.PlaneGeometry(1,0.35,1,1),
+  beamPlane:new THREE.PlaneGeometry(1,1,1,1),
+  bladePlane:new THREE.PlaneGeometry(1.4,0.18,1,1),
+  cylBeam:new THREE.CylinderGeometry(1,1,1,8,1,true),
+  streak:new THREE.BoxGeometry(1,0.12,0.12),
+  octa:new THREE.OctahedronGeometry(1,0),
+  cross:new THREE.PlaneGeometry(1,1,1,1),
 };
 
 // ══════════════════════════════════════════════════════
@@ -677,6 +687,8 @@ const CLASSES=[
          fn:()=>{
            mods.speedMult*=3;
            const oldArmor=mods.armorMult;mods.armorMult=0;
+           spawnAfterimagePulse(yawObj.position.clone(),0x00aaff);
+           spawnDashStreaks(yawObj.position.clone(),0x66ccff);
            spawnSkillFX(0x00aaff,15);
            showSkillNotify('💨 돌격!');
            setTimeout(()=>{mods.speedMult/=3;mods.armorMult=oldArmor;},3000);
@@ -684,14 +696,25 @@ const CLASSES=[
       e:{name:'방어막',  icon:'🛡️', cd:15, desc:'5초간 받는 피해 90% 감소',
          fn:()=>{
            const old=mods.armorMult;mods.armorMult*=0.1;
+           spawnGroundSigil(yawObj.position.clone(),0x4488ff,2.2,5);
            spawnSkillFX(0x4488ff,12);
+           // 시간차 보호막 링 2개
+           setTimeout(()=>{
+             const ring=new THREE.Mesh(_geoCache.ring015,new THREE.MeshBasicMaterial({color:0x66aaff,transparent:true,opacity:0.85,depthWrite:false}));
+             ring.scale.setScalar(0.5);ring._baseScale=0.5;ring.rotation.x=Math.PI/2;
+             ring.position.copy(yawObj.position).setY(1.2);
+             ring.userData={vel:new THREE.Vector3(),life:0.6,maxLife:0.6,type:'shockwave',color:0x66aaff};
+             scene.add(ring);skillFX.push(ring);
+           },200);
            showSkillNotify('🛡️ 방어막!');
            setTimeout(()=>{mods.armorMult=old;},5000);
          }},
       q:{name:'광전사', icon:'😤', cd:25, desc:'7초간 피해 2.5배, 연사속도 1.6배, HP 지속 회복',
          fn:()=>{
            mods.dmgMult*=2.5;mods.fireRateMult*=0.625;mods.regenRate+=6;
+           spawnVortexFX(yawObj.position.clone(),0xff2200,10,2.0);
            spawnSkillFX(0xff2200,20);
+           spawnGroundSigil(yawObj.position.clone(),0xff4400,2.5,1.5);
            showSkillNotify('😤 광전사!');
            setTimeout(()=>{mods.dmgMult/=2.5;mods.fireRateMult/=0.625;mods.regenRate-=6;},7000);
          }},
@@ -703,6 +726,10 @@ const CLASSES=[
     skills:{
       c:{name:'심장조준', icon:'💀', cd:6,  desc:'다음 탄환 즉시 헤드샷 확정 (10배 피해)',
          fn:()=>{
+           // 가장 가까운 적 위치에 표적 마커
+           let closest=null,closestDist=80;
+           for(const e of enemies){const d=yawObj.position.distanceTo(e.position);if(d<closestDist){closestDist=d;closest=e;}}
+           if(closest)spawnTargetMarker(closest.position.clone().setY(2.5),0xff2244);
            spawnSkillFX(0xff0000,8);
            showSkillNotify('💀 심장조준!');
            mods._nextOneShot=true;
@@ -710,7 +737,14 @@ const CLASSES=[
       e:{name:'위장',    icon:'👁️', cd:18, desc:'6초간 적이 플레이어를 감지 못함',
          fn:()=>{
            mods._cloaked=true;
-           spawnSkillFX(0xaaaaaa,10);
+           // 흩어지는 연기 + 반투명 잔상
+           for(let i=0;i<10;i++){
+             const sm=_makeParticle('smoke',0,0.3);
+             sm.position.set(yawObj.position.x+(Math.random()-0.5)*1,yawObj.position.y+Math.random()*2,yawObj.position.z+(Math.random()-0.5)*1);
+             sm.userData={vel:new THREE.Vector3((Math.random()-0.5)*1,0.6,(Math.random()-0.5)*1),life:0.9,maxLife:0.9,type:'smoke',startSize:1};
+             scene.add(sm);skillFX.push(sm);
+           }
+           spawnAfterimagePulse(yawObj.position.clone(),0x888888);
            showSkillNotify('👁️ 위장!');
            setTimeout(()=>{mods._cloaked=false;},6000);
          }},
@@ -729,6 +763,7 @@ const CLASSES=[
              e.userData.hp-=40*mods.dmgMult;e.userData.flashT=0.2;
              if(e.userData.hp<=0){spawnFX(e.position.clone());_lastKilledEnemy=e;scene.remove(e);enemies.splice(j,1);onKill();}
            }
+           spawnBeamFX(origin.clone().setY(yawObj.position.y+1.2),dir,60,0xff2244);
            spawnExplosionFX(origin.clone().addScaledVector(dir,60));
            showSkillNotify('💥 저격폭발!');
          }},
@@ -741,7 +776,7 @@ const CLASSES=[
       c:{name:'응급처치', icon:'🩹', cd:10, desc:'즉시 HP +50 회복',
          fn:()=>{
            playerHP=Math.min(playerHP+50,100);hpBar.style.width=playerHP+'%';
-           spawnSkillFX(0x00ff44,12);
+           spawnHealAura(yawObj.position.clone(),0x44ff77);
            showSkillNotify('🩹 응급처치!');
          }},
       e:{name:'구급상자', icon:'📦', cd:20, desc:'원하는 곳에 구급상자 설치 (E 다시 누르면 설치)',
@@ -750,7 +785,11 @@ const CLASSES=[
          fn:()=>{
            playerHP=100;hpBar.style.width='100%';
            mods.regenRate+=5;
-           spawnSkillFX(0xff4488,20);
+           spawnHealAura(yawObj.position.clone(),0xff4488);
+           spawnGroundSigil(yawObj.position.clone(),0xff88aa,2.5,2.5);
+           // 시간차 상승 펄스
+           setTimeout(()=>spawnHealAura(yawObj.position.clone(),0xff88aa),300);
+           setTimeout(()=>spawnHealAura(yawObj.position.clone(),0xff66aa),600);
            showSkillNotify('❤️ 완전회복!');
            setTimeout(()=>{mods.regenRate-=5;},10000);
          }},
@@ -795,13 +834,28 @@ const CLASSES=[
       c:{name:'순간이동', icon:'⚡', cd:7, desc:'조준 방향으로 8m 순간이동',
          fn:()=>{
            const dir=new THREE.Vector3();camera.getWorldDirection(dir);
+           const fromPos=yawObj.position.clone();
            const np=yawObj.position.clone().addScaledVector(dir,8);np.y=EYH;
            if(!isBlocked(np.x,np.z,PR)){yawObj.position.copy(np);}
-           spawnSkillFX(0xaa00ff,12);showSkillNotify('⚡ 순간이동!');
+           // 출발지 잔상 + 도착지 펄스
+           spawnAfterimagePulse(fromPos,0xaa00ff);
+           spawnAfterimagePulse(yawObj.position.clone(),0xcc66ff);
+           spawnDashStreaks(yawObj.position.clone(),0xcc44ff);
+           showSkillNotify('⚡ 순간이동!');
          }},
       e:{name:'연막탄', icon:'💨', cd:14, desc:'5초간 적 감지 차단',
          fn:()=>{
-           mods._cloaked=true;spawnSkillFX(0x888888,16);showSkillNotify('💨 연막!');
+           mods._cloaked=true;
+           // 큰 연막 구름
+           for(let i=0;i<14;i++){
+             const sm=_makeParticle('smoke',0,0.35+Math.random()*0.2);
+             const ang=Math.random()*Math.PI*2,r=Math.random()*2;
+             sm.position.set(yawObj.position.x+Math.cos(ang)*r,yawObj.position.y+Math.random()*2.5,yawObj.position.z+Math.sin(ang)*r);
+             sm.userData={vel:new THREE.Vector3((Math.random()-0.5)*1,0.5+Math.random()*1,(Math.random()-0.5)*1),life:1.2+Math.random()*0.6,maxLife:1.8,type:'smoke',startSize:1};
+             scene.add(sm);skillFX.push(sm);
+           }
+           spawnGroundSigil(yawObj.position.clone(),0x888888,2,1.5);
+           showSkillNotify('💨 연막!');
            setTimeout(()=>{mods._cloaked=false;},5000);
          }},
       q:{name:'암살', icon:'🗡️', cd:20, desc:'가장 가까운 적 HP 80% 제거',
@@ -809,10 +863,16 @@ const CLASSES=[
            let closest=null,closestDist=22;
            for(const e of enemies){const d=yawObj.position.distanceTo(e.position);if(d<closestDist){closestDist=d;closest=e;}}
            if(closest){
+             const tp=closest.position.clone().setY(1.5);
              closest.userData.hp-=closest.userData.maxHP*0.8*mods.dmgMult;closest.userData.flashT=0.4;
+             // 검호 슬래시 임팩트 + 마커 + 보텍스
+             spawnSlashImpactFX(tp);
+             spawnSlashImpactFX(tp);
+             spawnTargetMarker(tp,0xaa00ff);
+             spawnVortexFX(closest.position.clone(),0xaa00ff,8,0.6);
              if(closest.userData.hp<=0){spawnFX(closest.position.clone());_lastKilledEnemy=closest;scene.remove(closest);const idx=enemies.indexOf(closest);if(idx>=0){enemies.splice(idx,1);onKill();}}
-           }
-           spawnSkillFX(0xaa00ff,20);showSkillNotify('🗡️ 암살!');
+           } else spawnSkillFX(0xaa00ff,20);
+           showSkillNotify('🗡️ 암살!');
          }},
     }
   },
@@ -836,19 +896,33 @@ const CLASSES=[
                e.userData.hp-=3*mods.dmgMult;e.userData.flashT=0.1;
                if(e.userData.hp<=0){spawnFX(e.position.clone());_lastKilledEnemy=e;scene.remove(e);enemies.splice(j,1);onKill();}
              }
+             // 매 틱 화염 콘 — 0.2초 간격으로만(부담↓)
+             if(Math.round(elapsed*10)%2===0)spawnFlameConeFX(origin,dir,12,0xff6600);
              if(elapsed>=4)clearInterval(iv);
            },100);
            spawnSkillFX(0xff4400,18);showSkillNotify('🔥 화염방사!');
          }},
       e:{name:'불폭탄', icon:'💥', cd:12, desc:'발밑에 3초간 화염 지대 생성',
          fn:()=>{
-           const fp=yawObj.position.clone();spawnExplosionFX(fp);
+           const fp=yawObj.position.clone();
+           spawnExplosionFX(fp);
+           spawnGroundSigil(fp,0xff4400,3.5,3);
            let t2=0;const iv=setInterval(()=>{
              t2+=0.2;
              for(let j=enemies.length-1;j>=0;j--){
                if(enemies[j].position.distanceTo(fp)<3.5){
                  enemies[j].userData.hp-=4*mods.dmgMult;enemies[j].userData.flashT=0.1;
                  if(enemies[j].userData.hp<=0){spawnFX(enemies[j].position.clone());_lastKilledEnemy=enemies[j];scene.remove(enemies[j]);enemies.splice(j,1);onKill();}
+               }
+             }
+             // 매 0.4초마다 화염 입자 분출
+             if(Math.round(t2*5)%2===0){
+               for(let i=0;i<4;i++){
+                 const ang=Math.random()*Math.PI*2,r=Math.random()*3;
+                 const sp=_makeParticle('ember',i%2===0?0xff8800:0xff3300,0.15);
+                 sp.position.set(fp.x+Math.cos(ang)*r,fp.y+0.2,fp.z+Math.sin(ang)*r);
+                 sp.userData={vel:new THREE.Vector3((Math.random()-0.5)*1,2+Math.random()*2,(Math.random()-0.5)*1),life:0.5+Math.random()*0.3,maxLife:0.8,type:'ember'};
+                 scene.add(sp);skillFX.push(sp);
                }
              }
              if(t2>=3)clearInterval(iv);
@@ -863,7 +937,9 @@ const CLASSES=[
                if(enemies[j].userData.hp<=0){spawnFX(enemies[j].position.clone());_lastKilledEnemy=enemies[j];scene.remove(enemies[j]);enemies.splice(j,1);onKill();}
              }
            }
-           spawnExplosionFX(yawObj.position.clone());spawnSkillFX(0xff2200,30);showSkillNotify('🌋 인페르노!');
+           spawnNova(yawObj.position.clone(),0xff2200,18);
+           spawnVortexFX(yawObj.position.clone(),0xff6600,16,1.5);
+           showSkillNotify('🌋 인페르노!');
          }},
     }
   },
@@ -875,13 +951,27 @@ const CLASSES=[
       c:{name:'오버클럭', icon:'⚙️', cd:12, desc:'6초간 연사속도 3배, 이동속도 2배',
          fn:()=>{
            mods.fireRateMult*=0.33;mods.speedMult*=2;
-           spawnSkillFX(0x00ffff,15);showSkillNotify('⚙️ 오버클럭!');
+           spawnVortexFX(yawObj.position.clone(),0x00ffff,8,1.5);
+           spawnDigitalGlitch(yawObj.position.clone(),0x00ffff);
+           showSkillNotify('⚙️ 오버클럭!');
            setTimeout(()=>{mods.fireRateMult/=0.33;mods.speedMult/=2;},6000);
          }},
       e:{name:'실드 충전', icon:'🔋', cd:18, desc:'5초간 피해 무효 실드',
          fn:()=>{
            const old=mods.armorMult;mods.armorMult=0;
-           spawnSkillFX(0x00ffff,12);showSkillNotify('🔋 실드 충전!');
+           spawnGroundSigil(yawObj.position.clone(),0x00ffff,2.5,5);
+           spawnSkillFX(0x00ffff,12);
+           // 둘러싸는 박스/링
+           setTimeout(()=>{
+             for(let k=0;k<3;k++){
+               const ring=new THREE.Mesh(_geoCache.ring015,new THREE.MeshBasicMaterial({color:0x00ffff,transparent:true,opacity:0.85,depthWrite:false}));
+               ring.scale.setScalar(0.4);ring._baseScale=0.4;ring.rotation.x=Math.PI/2;
+               ring.position.set(yawObj.position.x,yawObj.position.y+0.3+k*1,yawObj.position.z);
+               ring.userData={vel:new THREE.Vector3(),life:0.5,maxLife:0.5,type:'shockwave',color:0x00ffff};
+               scene.add(ring);skillFX.push(ring);
+             }
+           },150);
+           showSkillNotify('🔋 실드 충전!');
            setTimeout(()=>{mods.armorMult=old;},5000);
          }},
       q:{name:'핵 펄스', icon:'☢️', cd:28, desc:'12m 내 적에게 200 피해 (보스 생존 가능)',
@@ -892,7 +982,15 @@ const CLASSES=[
                if(enemies[j].userData.hp<=0){spawnFX(enemies[j].position.clone());_lastKilledEnemy=enemies[j];scene.remove(enemies[j]);enemies.splice(j,1);onKill();}
              }
            }
-           spawnSkillFX(0x00ffff,25);showSkillNotify('☢️ 핵 펄스!');
+           spawnNova(yawObj.position.clone(),0x00ffff,12);
+           // 8방향 번개 호
+           for(let i=0;i<8;i++){
+             const ang=i/8*Math.PI*2;
+             const from=yawObj.position.clone().setY(1.5);
+             const to=new THREE.Vector3(yawObj.position.x+Math.cos(ang)*10,1.5,yawObj.position.z+Math.sin(ang)*10);
+             spawnLightningArc(from,to,0x88ffff);
+           }
+           showSkillNotify('☢️ 핵 펄스!');
          }},
     }
   },
@@ -909,7 +1007,7 @@ const CLASSES=[
              closest.userData.hp-=closest.userData.maxHP*0.3*mods.dmgMult;
              closest.userData.flashT=0.4;
              if(closest.userData.hp<=0){spawnFX(closest.position.clone());_lastKilledEnemy=closest;scene.remove(closest);const idx=enemies.indexOf(closest);if(idx>=0){enemies.splice(idx,1);onKill();}}
-             spawnSkillFX(0xff4444,8,closest.position);
+             else spawnTargetMarker(closest.position.clone().setY(2.5),0xff4444);
            }
            showSkillNotify('🎯 표식!');
          }},
@@ -927,9 +1025,17 @@ const CLASSES=[
              const cx=origin.x+dir.x*t2,cz=origin.z+dir.z*t2;
              if(Math.sqrt((cx-e.position.x)**2+(cz-e.position.z)**2)>1.5)continue;
              e.userData.hp-=e.userData.maxHP*0.3*mods.dmgMult;e.userData.flashT=0.2;
+             // 독구름 입자
+             for(let i=0;i<3;i++){
+               const sp=_makeParticle('ember',0x66ff44,0.1+Math.random()*0.05);
+               sp.position.copy(e.position).setY(1.5);
+               sp.userData={vel:new THREE.Vector3((Math.random()-0.5)*2,1+Math.random(),(Math.random()-0.5)*2),life:0.5,maxLife:0.5,type:'ember'};
+               scene.add(sp);skillFX.push(sp);
+             }
              if(e.userData.hp<=0){spawnFX(e.position.clone());_lastKilledEnemy=e;scene.remove(e);enemies.splice(j,1);onKill();}
            }
-           spawnSkillFX(0x44ff44,14);showSkillNotify('☠️ 독화살!');
+           spawnBeamFX(origin.clone().setY(yawObj.position.y+1.2),dir,50,0x44ff44);
+           showSkillNotify('☠️ 독화살!');
          }},
     }
   },
@@ -951,17 +1057,29 @@ const CLASSES=[
              const cx=origin.x+dir.x*t2,cz=origin.z+dir.z*t2;
              if(Math.sqrt((cx-e.position.x)**2+(cz-e.position.z)**2)>2.5)continue;
              e.userData.hp-=45*mods.dmgMult;e.userData.flashT=0.25;
-             // 밀쳐내기
              e.position.x+=dir.x*4;e.position.z+=dir.z*4;
              if(e.userData.hp<=0){spawnFX(e.position.clone());_lastKilledEnemy=e;scene.remove(e);enemies.splice(j,1);onKill();}
            }
-           spawnExplosionFX(origin.clone().addScaledVector(dir,2.5));
+           // 전방 직선 충격파 (슬래시처럼 사용해도 파란색이라 강타 느낌)
+           spawnSlashFX(origin.clone().setY(1.2),dir,5,0x4488ff);
            spawnSkillFX(0x4488ff,15);showSkillNotify('💥 방패 강타!');
          }},
       e:{name:'요새화', icon:'🏰', cd:14, desc:'5초간 받는 피해 95% 감소 + HP 재생',
          fn:()=>{
            const old=mods.armorMult;mods.armorMult*=0.05;mods.regenRate+=10;
-           spawnSkillFX(0x66aaff,20);showSkillNotify('🏰 요새화!');
+           spawnGroundSigil(yawObj.position.clone(),0x66aaff,2.8,5);
+           spawnSkillFX(0x66aaff,20);
+           // 보호막 도약 링 4개 (시간차)
+           for(let k=0;k<4;k++){
+             setTimeout(()=>{
+               const ring=new THREE.Mesh(_geoCache.ring015,new THREE.MeshBasicMaterial({color:0x88ccff,transparent:true,opacity:0.85,depthWrite:false}));
+               ring.scale.setScalar(0.4);ring._baseScale=0.4;ring.rotation.x=Math.PI/2;
+               ring.position.set(yawObj.position.x,yawObj.position.y+0.2+k*0.6,yawObj.position.z);
+               ring.userData={vel:new THREE.Vector3(),life:0.6,maxLife:0.6,type:'shockwave',color:0x88ccff};
+               scene.add(ring);skillFX.push(ring);
+             },k*100);
+           }
+           showSkillNotify('🏰 요새화!');
            setTimeout(()=>{mods.armorMult=old;mods.regenRate-=10;},5000);
          }},
       q:{name:'도발의 함성', icon:'📢', cd:22, desc:'12m 내 적 끌어당김 + 8초간 방어 +70%',
@@ -977,7 +1095,9 @@ const CLASSES=[
              }
            }
            const old=mods.armorMult;mods.armorMult*=0.3;
-           spawnSkillFX(0x4488ff,25);showSkillNotify('📢 도발!');
+           spawnNova(yawObj.position.clone(),0x4488ff,12);
+           spawnGroundSigil(yawObj.position.clone(),0x4488ff,3,2);
+           showSkillNotify('📢 도발!');
            setTimeout(()=>{mods.armorMult=old;},8000);
          }},
     }
@@ -1000,12 +1120,15 @@ const CLASSES=[
              const cx=origin.x+dir.x*t2,cz=origin.z+dir.z*t2;
              if(Math.sqrt((cx-e.position.x)**2+(cz-e.position.z)**2)>1.4)continue;
              e.userData.hp-=35*mods.dmgMult;e.userData.flashT=0.2;
+             spawnSlashImpactFX(e.position.clone().setY(1.5));
              if(e.userData.hp<=0){spawnFX(e.position.clone());_lastKilledEnemy=e;scene.remove(e);enemies.splice(j,1);onKill();}
            }
-           spawnSkillFX(0xaaccff,12);showSkillNotify('🦴 뼈 창!');
+           spawnBeamFX(origin.clone().setY(yawObj.position.y+1.2),dir,40,0xeef5ff);
+           showSkillNotify('🦴 뼈 창!');
          }},
       e:{name:'죽음의 오라', icon:'🌫️', cd:15, desc:'주변 7m 적에게 8초간 초당 12 피해',
          fn:()=>{
+           spawnGroundSigil(yawObj.position.clone(),0x88ccff,7,8);
            let elapsed=0;
            const iv=setInterval(()=>{
              elapsed+=0.2;
@@ -1016,6 +1139,17 @@ const CLASSES=[
                if(dx*dx+dz*dz<49){
                  e.userData.hp-=2.4*mods.dmgMult;e.userData.flashT=0.08;
                  if(e.userData.hp<=0){spawnFX(e.position.clone());_lastKilledEnemy=e;scene.remove(e);enemies.splice(j,1);onKill();}
+               }
+             }
+             // 안개 입자 매 틱
+             if(Math.round(elapsed*5)%3===0){
+               for(let i=0;i<3;i++){
+                 const ang=Math.random()*Math.PI*2,r=Math.random()*7;
+                 const sm=_makeParticle('smoke',0,0.25);
+                 sm.position.set(cp.x+Math.cos(ang)*r,0.3,cp.z+Math.sin(ang)*r);
+                 sm.material.color.setHex(0x6688aa);
+                 sm.userData={vel:new THREE.Vector3(0,0.5,0),life:0.8,maxLife:0.8,type:'smoke',startSize:1};
+                 scene.add(sm);skillFX.push(sm);
                }
              }
              if(elapsed>=8)clearInterval(iv);
@@ -1031,11 +1165,16 @@ const CLASSES=[
              const dx=cp.x-e.position.x,dz=cp.z-e.position.z;
              if(dx*dx+dz*dz<324){
                e.userData.hp-=60*mods.dmgMult;e.userData.flashT=0.3;
-               if(e.userData.hp<=0){spawnFX(e.position.clone());_lastKilledEnemy=e;scene.remove(e);enemies.splice(j,1);onKill();killed++;}
+               if(e.userData.hp<=0){
+                 spawnFX(e.position.clone());
+                 spawnSoulRise(e.position.clone(),0xaa66ff,5);
+                 _lastKilledEnemy=e;scene.remove(e);enemies.splice(j,1);onKill();killed++;
+               }
              }
            }
            playerHP=Math.min(playerHP+killed*6,100);hpBar.style.width=playerHP+'%';
-           spawnSkillFX(0xaa44ff,30);showSkillNotify('⚰️ 영혼 수확 — '+killed+' 처치!');
+           spawnNova(yawObj.position.clone(),0xaa44ff,18);
+           showSkillNotify('⚰️ 영혼 수확 — '+killed+' 처치!');
          }},
     }
   },
@@ -1046,14 +1185,22 @@ const CLASSES=[
     skills:{
       c:{name:'EMP', icon:'⚡', cd:8, desc:'10m 내 적 4초간 70% 감속',
          fn:()=>{
-           const cp=yawObj.position;
+           const cp=yawObj.position.clone();
            for(const e of enemies){
              const dx=cp.x-e.position.x,dz=cp.z-e.position.z;
              if(dx*dx+dz*dz<100){
                e.userData._origSpd=e.userData._origSpd||e.userData.spdMult;
                e.userData.spdMult=e.userData._origSpd*0.3;
                e.userData.flashT=0.4;
+               // 각 적에 번개 호 (가까운 적만 — 8개 한도)
              }
+           }
+           // 8방향 번개 (시각 효과)
+           for(let i=0;i<8;i++){
+             const ang=i/8*Math.PI*2;
+             const from=cp.clone().setY(1.5);
+             const to=new THREE.Vector3(cp.x+Math.cos(ang)*10,1.5,cp.z+Math.sin(ang)*10);
+             spawnLightningArc(from,to,0x00ffff);
            }
            setTimeout(()=>{
              for(const e of enemies){if(e.userData._origSpd){e.userData.spdMult=e.userData._origSpd;}}
@@ -1066,9 +1213,9 @@ const CLASSES=[
            for(const e of enemies){const d=yawObj.position.distanceTo(e.position);if(d<closestDist){closestDist=d;closest=e;}}
            if(closest){
              closest.userData._origAtkCd=closest.userData.atkCd;
-             closest.userData.atkCd=99; // 사격 정지
+             closest.userData.atkCd=99;
              closest.userData._origSpd=closest.userData._origSpd||closest.userData.spdMult;
-             closest.userData.spdMult=closest.userData._origSpd*0.1; // 거의 멈춤
+             closest.userData.spdMult=closest.userData._origSpd*0.1;
              closest.userData.flashT=0.5;
              setTimeout(()=>{
                if(closest.userData){
@@ -1076,13 +1223,17 @@ const CLASSES=[
                  if(closest.userData._origSpd)closest.userData.spdMult=closest.userData._origSpd;
                }
              },6000);
-             spawnSkillFX(0x00ff88,15,closest.position.clone().setY(2));
+             // 플레이어 → 적 번개 + 글리치
+             spawnLightningArc(yawObj.position.clone().setY(1.5),closest.position.clone().setY(1.5),0x00ff88);
+             spawnDigitalGlitch(closest.position.clone(),0x00ff88);
+             spawnTargetMarker(closest.position.clone().setY(2.5),0x00ff88);
              showSkillNotify('🖥️ 해킹 성공!');
            } else showSkillNotify('🖥️ 대상 없음');
          }},
       q:{name:'시스템 크래시', icon:'💥', cd:25, desc:'15m 내 모든 적 3초 마비 + 40 피해',
          fn:()=>{
-           const cp=yawObj.position;
+           const cp=yawObj.position.clone();
+           let cnt=0;
            for(let j=enemies.length-1;j>=0;j--){
              const e=enemies[j];
              const dx=cp.x-e.position.x,dz=cp.z-e.position.z;
@@ -1090,13 +1241,20 @@ const CLASSES=[
                e.userData.hp-=40*mods.dmgMult;e.userData.flashT=0.3;
                e.userData._origSpd=e.userData._origSpd||e.userData.spdMult;
                e.userData.spdMult=0;
+               // 적 위치에 번개 (최대 12개만)
+               if(cnt<12){
+                 spawnLightningArc(cp.clone().setY(1.5),e.position.clone().setY(1.5),0x00ffff);
+                 cnt++;
+               }
                if(e.userData.hp<=0){spawnFX(e.position.clone());_lastKilledEnemy=e;scene.remove(e);enemies.splice(j,1);onKill();}
              }
            }
            setTimeout(()=>{
              for(const e of enemies){if(e.userData._origSpd){e.userData.spdMult=e.userData._origSpd;}}
            },3000);
-           spawnSkillFX(0x00ffff,30);showSkillNotify('💥 시스템 크래시!');
+           spawnNova(cp,0x00ffff,15);
+           spawnDigitalGlitch(cp,0x00ffff);
+           showSkillNotify('💥 시스템 크래시!');
          }},
     }
   },
@@ -1182,13 +1340,27 @@ const CLASSES=[
              setTimeout(()=>{
                const ang=Math.random()*Math.PI*2,r=Math.random()*15;
                const lp=new THREE.Vector3(cp.x+Math.cos(ang)*r,0.5,cp.z+Math.sin(ang)*r);
-               spawnExplosionFX(lp);
-               for(let j=enemies.length-1;j>=0;j--){
-                 if(enemies[j].position.distanceTo(lp)<6){
-                   enemies[j].userData.hp-=45*mods.dmgMult;enemies[j].userData.flashT=0.3;
-                   if(enemies[j].userData.hp<=0){spawnFX(enemies[j].position.clone());_lastKilledEnemy=enemies[j];scene.remove(enemies[j]);enemies.splice(j,1);onKill();}
-                 }
+               // 낙하 표적 마커 후 폭발
+               spawnTargetMarker(lp.clone().setY(0.1),0xff8800);
+               // 낙하 streaks (위→아래)
+               for(let k=0;k<3;k++){
+                 const m=new THREE.MeshBasicMaterial({color:0xff8800,transparent:true,opacity:0.9,depthWrite:false});
+                 const s=new THREE.Mesh(_geoCache.streak,m);
+                 s.position.set(lp.x+(Math.random()-0.5)*2,lp.y+8,lp.z+(Math.random()-0.5)*2);
+                 s.scale.set(0.4,1,1);s._baseScale=0.4;
+                 s.rotation.x=Math.PI/2;
+                 s.userData={vel:new THREE.Vector3(0,-20,0),life:0.3,maxLife:0.3,type:'streak',startOpacity:0.9};
+                 scene.add(s);skillFX.push(s);
                }
+               setTimeout(()=>{
+                 spawnExplosionFX(lp);
+                 for(let j=enemies.length-1;j>=0;j--){
+                   if(enemies[j].position.distanceTo(lp)<6){
+                     enemies[j].userData.hp-=45*mods.dmgMult;enemies[j].userData.flashT=0.3;
+                     if(enemies[j].userData.hp<=0){spawnFX(enemies[j].position.clone());_lastKilledEnemy=enemies[j];scene.remove(enemies[j]);enemies.splice(j,1);onKill();}
+                   }
+                 }
+               },300);
              },i*350);
            }
            spawnSkillFX(0xff8800,25);showSkillNotify('✈️ 공습!');
@@ -1200,7 +1372,7 @@ const CLASSES=[
     id:'sword', name:'검호', icon:'⚔️',
     desc:'칼날의 달인. 근접 + 회피.',
     skills:{
-      c:{name:'검기', icon:'🗡️', cd:4, desc:'전방 직선 8m — 적에 80 피해',
+      c:{name:'검기', icon:'🗡️', cd:4, desc:'전방 직선 10m — 적에 120 피해',
          fn:()=>{
            const dir=new THREE.Vector3();camera.getWorldDirection(dir);
            const origin=yawObj.position.clone();
@@ -1208,24 +1380,28 @@ const CLASSES=[
              const e=enemies[j];
              const dx=e.position.x-origin.x,dz=e.position.z-origin.z;
              const denom=dir.x*dir.x+dir.z*dir.z;if(denom<0.001)continue;
-             const t2=(dx*dir.x+dz*dir.z)/denom;if(t2<0||t2>8)continue;
+             const t2=(dx*dir.x+dz*dir.z)/denom;if(t2<0||t2>10)continue;
              const cx=origin.x+dir.x*t2,cz=origin.z+dir.z*t2;
-             if(Math.sqrt((cx-e.position.x)**2+(cz-e.position.z)**2)>1.6)continue;
-             e.userData.hp-=80*mods.dmgMult;e.userData.flashT=0.25;
+             if(Math.sqrt((cx-e.position.x)**2+(cz-e.position.z)**2)>2.2)continue;
+             e.userData.hp-=120*mods.dmgMult;e.userData.flashT=0.3;
+             spawnSlashImpactFX(e.position.clone().setY(1.5));
              if(e.userData.hp<=0){spawnFX(e.position.clone());_lastKilledEnemy=e;scene.remove(e);enemies.splice(j,1);onKill();}
            }
-           spawnSkillFX(0xccffff,15,origin.clone().addScaledVector(dir,4));
+           spawnSlashFX(origin.clone().setY(1.5),dir,10,0xeeffff);
            showSkillNotify('🗡️ 검기!');
          }},
-      e:{name:'회피', icon:'💨', cd:10, desc:'1초 무적 + 2.5초간 속도 1.8배',
+      e:{name:'회피', icon:'💨', cd:10, desc:'1.5초 무적 + 2.5초간 속도 2.2배',
          fn:()=>{
-           const old=mods.armorMult;mods.armorMult=0;mods.speedMult*=1.8;
-           spawnSkillFX(0xaaaaff,12);showSkillNotify('💨 회피!');
-           setTimeout(()=>{mods.armorMult=old;},1000);
-           setTimeout(()=>{mods.speedMult/=1.8;},2500);
+           const old=mods.armorMult;mods.armorMult=0;mods.speedMult*=2.2;
+           spawnAfterimagePulse(yawObj.position.clone(),0xaaccff);
+           spawnDashStreaks(yawObj.position.clone(),0x88bbff);
+           showSkillNotify('💨 회피!');
+           setTimeout(()=>{mods.armorMult=old;},1500);
+           setTimeout(()=>{mods.speedMult/=2.2;},2500);
          }},
-      q:{name:'무한검극', icon:'⚔️', cd:22, desc:'6초간 0.4초마다 주변 8m 적에 35 피해',
+      q:{name:'무한검극', icon:'⚔️', cd:22, desc:'6초간 0.4초마다 주변 10m 적에 55 피해',
          fn:()=>{
+           spawnSwordStormBurst(yawObj.position.clone(),0xeeffff);
            let elapsed=0;
            const iv=setInterval(()=>{
              elapsed+=0.4;
@@ -1234,15 +1410,16 @@ const CLASSES=[
              for(let j=enemies.length-1;j>=0;j--){
                const e=enemies[j];
                const dx=cp.x-e.position.x,dz=cp.z-e.position.z;
-               if(dx*dx+dz*dz<64){
-                 e.userData.hp-=35*mods.dmgMult;e.userData.flashT=0.15;hit=true;
+               if(dx*dx+dz*dz<100){
+                 e.userData.hp-=55*mods.dmgMult;e.userData.flashT=0.18;hit=true;
+                 spawnSlashImpactFX(e.position.clone().setY(1.5));
                  if(e.userData.hp<=0){spawnFX(e.position.clone());_lastKilledEnemy=e;scene.remove(e);enemies.splice(j,1);onKill();}
                }
              }
-             if(hit)spawnSkillFX(0xccffff,4,cp.clone().setY(1.5));
+             spawnSwordStormBurst(cp.clone(),0xeeffff);
              if(elapsed>=6)clearInterval(iv);
            },400);
-           spawnSkillFX(0xccffff,25);showSkillNotify('⚔️ 무한검극!');
+           showSkillNotify('⚔️ 무한검극!');
          }},
     }
   },
@@ -1282,7 +1459,7 @@ const CLASSES=[
          }},
       e:{name:'얼음폭풍', icon:'❄️', cd:12, desc:'12m 내 적 5초간 80% 감속',
          fn:()=>{
-           const cp=yawObj.position;
+           const cp=yawObj.position.clone();
            for(const e of enemies){
              const dx=cp.x-e.position.x,dz=cp.z-e.position.z;
              if(dx*dx+dz*dz<144){
@@ -1294,7 +1471,19 @@ const CLASSES=[
            setTimeout(()=>{
              for(const e of enemies){if(e.userData._origSpd){e.userData.spdMult=e.userData._origSpd;}}
            },5000);
-           spawnSkillFX(0x88ddff,25);showSkillNotify('❄️ 얼음폭풍!');
+           // 얼음 결정 8각 — 작은 octahedron들이 12m 반경에 흩뿌려짐
+           for(let i=0;i<14;i++){
+             const ang=Math.random()*Math.PI*2,r=Math.random()*11;
+             const cx=cp.x+Math.cos(ang)*r,cz=cp.z+Math.sin(ang)*r;
+             const mat=new THREE.MeshBasicMaterial({color:0xaaeeff,transparent:true,opacity:0.85,depthWrite:false});
+             const ic=new THREE.Mesh(_geoCache.octa,mat);
+             ic.position.set(cx,3+Math.random()*2,cz);
+             ic.scale.setScalar(0.4+Math.random()*0.3);ic._baseScale=ic.scale.x;
+             ic.userData={vel:new THREE.Vector3(0,-8-Math.random()*4,0),life:0.5+Math.random()*0.3,maxLife:0.8,type:'streak',startOpacity:0.85,rotV:new THREE.Vector3(3,2,1)};
+             scene.add(ic);skillFX.push(ic);
+           }
+           spawnGroundSigil(cp,0x88ddff,12,5);
+           spawnSkillFX(0x88ddff,18);showSkillNotify('❄️ 얼음폭풍!');
          }},
       q:{name:'번개폭풍', icon:'⚡', cd:25, desc:'18m 내 적에 번개 8회 (각 30 피해)',
          fn:()=>{
@@ -1305,15 +1494,18 @@ const CLASSES=[
                if(cands.length===0)return;
                const targ=cands[Math.floor(Math.random()*cands.length)];
                targ.userData.hp-=30*mods.dmgMult;targ.userData.flashT=0.25;
-               spawnSkillFX(0xeeeeff,8,targ.position.clone().setY(3));
-               // 번개 시각 효과 (수직 빔)
-               const lb=new THREE.Mesh(new THREE.CylinderGeometry(0.05,0.05,8,5),new THREE.MeshBasicMaterial({color:0xeeeeff,transparent:true,opacity:0.9}));
-               lb.position.copy(targ.position);lb.position.y=4;scene.add(lb);
-               setTimeout(()=>{scene.remove(lb);lb.geometry.dispose();lb.material.dispose();},150);
+               // 하늘 → 적 번개 호
+               const skyPt=targ.position.clone();skyPt.y=10;
+               spawnLightningArc(skyPt,targ.position.clone().setY(0.5),0xeeeeff);
+               // 적 위치에 임팩트 글로우
+               const g=_makeParticle('glow',0xeeeeff,0.6);
+               g.position.copy(targ.position).setY(1.2);
+               g.userData={vel:new THREE.Vector3(),life:0.3,maxLife:0.3,type:'glow'};
+               scene.add(g);skillFX.push(g);
                if(targ.userData.hp<=0){spawnFX(targ.position.clone());_lastKilledEnemy=targ;const idx=enemies.indexOf(targ);if(idx>=0){scene.remove(targ);enemies.splice(idx,1);onKill();}}
              },i*200);
            }
-           spawnSkillFX(0xeeeeff,30);showSkillNotify('⚡ 번개폭풍!');
+           spawnNova(cp,0xeeeeff,18);showSkillNotify('⚡ 번개폭풍!');
          }},
     }
   },
@@ -1325,20 +1517,33 @@ const CLASSES=[
       c:{name:'시간정지', icon:'⏸️', cd:14, desc:'3초간 모든 적 정지 (총알 포함)',
          fn:()=>{
            mods._timeStop=true;
-           spawnSkillFX(0xddddff,30);showSkillNotify('⏸️ 시간정지!');
-           setTimeout(()=>{mods._timeStop=false;showSkillNotify('▶️ 시간 복구');},3000);
+           spawnTimePulse(yawObj.position.clone(),0xddddff);
+           spawnNova(yawObj.position.clone(),0xddddff,15);
+           showSkillNotify('⏸️ 시간정지!');
+           setTimeout(()=>{
+             mods._timeStop=false;
+             spawnTimePulse(yawObj.position.clone(),0xffeecc);
+             showSkillNotify('▶️ 시간 복구');
+           },3000);
          }},
       e:{name:'시간역행', icon:'🔄', cd:15, desc:'즉시 HP +60 + 2초 무적',
          fn:()=>{
            playerHP=Math.min(playerHP+60,100);hpBar.style.width=playerHP+'%';
            const old=mods.armorMult;mods.armorMult=0;
-           spawnSkillFX(0x88ffcc,20);showSkillNotify('🔄 시간역행!');
+           spawnHealAura(yawObj.position.clone(),0x88ffcc);
+           spawnTimePulse(yawObj.position.clone(),0x88ffcc);
+           // 역회전 룬
+           spawnGroundSigil(yawObj.position.clone(),0x88ffcc,2.5,2);
+           showSkillNotify('🔄 시간역행!');
            setTimeout(()=>{mods.armorMult=old;},2000);
          }},
       q:{name:'시간가속', icon:'⏩', cd:28, desc:'8초간 연사/이동/재장전 2배',
          fn:()=>{
            mods.fireRateMult*=0.5;mods.speedMult*=2;
-           spawnSkillFX(0xffcc88,25);showSkillNotify('⏩ 시간가속!');
+           spawnVortexFX(yawObj.position.clone(),0xffcc88,12,2);
+           spawnDashStreaks(yawObj.position.clone(),0xffaa66);
+           spawnTimePulse(yawObj.position.clone(),0xffcc88);
+           showSkillNotify('⏩ 시간가속!');
            setTimeout(()=>{mods.fireRateMult/=0.5;mods.speedMult/=2;},8000);
          }},
     }
@@ -1356,10 +1561,9 @@ const CLASSES=[
              const dx=e.position.x-origin.x,dz=e.position.z-origin.z;
              const d=Math.sqrt(dx*dx+dz*dz);
              if(d>15)continue;
-             // 부채꼴 — 정면 dot product
              const ndx=dx/d,ndz=dz/d;
              const fdot=ndx*dir.x+ndz*dir.z;
-             if(fdot<0.5)continue; // ~60도 부채꼴
+             if(fdot<0.5)continue;
              e.userData._origSpd=e.userData._origSpd||e.userData.spdMult;
              e.userData.spdMult=e.userData._origSpd*0.25;
              e.userData.flashT=0.4;
@@ -1367,34 +1571,52 @@ const CLASSES=[
            setTimeout(()=>{
              for(const e of enemies){if(e.userData._origSpd){e.userData.spdMult=e.userData._origSpd;}}
            },4000);
-           spawnSkillFX(0xff88ff,20);showSkillNotify('💫 정신충격!');
+           spawnPsiCone(origin,dir,15,0xff88ff);
+           showSkillNotify('💫 정신충격!');
          }},
       e:{name:'텔레키네시스', icon:'✊', cd:12, desc:'가장 가까운 적을 들어 던지기 (60 피해)',
          fn:()=>{
            let closest=null,closestDist=18;
            for(const e of enemies){const d=yawObj.position.distanceTo(e.position);if(d<closestDist){closestDist=d;closest=e;}}
            if(closest){
+             const startPos=closest.position.clone();
+             spawnPsiGrip(startPos,0xff88ff);
              closest.userData.hp-=60*mods.dmgMult;closest.userData.flashT=0.5;
-             // 멀리 던지기
              const dir=new THREE.Vector3();camera.getWorldDirection(dir);
              closest.position.x+=dir.x*6;closest.position.z+=dir.z*6;
-             spawnSkillFX(0xff88ff,15,closest.position.clone().setY(3));
+             // 던지기 streak
+             const mat=new THREE.MeshBasicMaterial({color:0xff88ff,transparent:true,opacity:0.85,depthWrite:false});
+             const s=new THREE.Mesh(_geoCache.streak,mat);
+             s.position.copy(startPos).setY(2);
+             const tl=startPos.distanceTo(closest.position);
+             s.scale.set(tl,1,1);s._baseScale=tl;
+             s.lookAt(closest.position.clone().setY(2));s.rotateY(Math.PI/2);
+             s.userData={vel:new THREE.Vector3(),life:0.3,maxLife:0.3,type:'fade',startOpacity:0.85};
+             scene.add(s);skillFX.push(s);
+             spawnSlashImpactFX(closest.position.clone().setY(1.5));
              if(closest.userData.hp<=0){spawnFX(closest.position.clone());_lastKilledEnemy=closest;scene.remove(closest);const idx=enemies.indexOf(closest);if(idx>=0){enemies.splice(idx,1);onKill();}}
            }
            showSkillNotify('✊ 텔레키네시스!');
          }},
       q:{name:'정신폭발', icon:'🧠', cd:25, desc:'18m 내 모든 적 현재 HP 50% 제거',
          fn:()=>{
-           const cp=yawObj.position;
+           const cp=yawObj.position.clone();
            for(let j=enemies.length-1;j>=0;j--){
              const e=enemies[j];
              const dx=cp.x-e.position.x,dz=cp.z-e.position.z;
              if(dx*dx+dz*dz<324){
                e.userData.hp*=0.5;e.userData.flashT=0.4;
+               // 각 적에 사이오닉 글로우
+               const g=_makeParticle('glow',0xff44ff,0.5);
+               g.position.copy(e.position).setY(1.5);
+               g.userData={vel:new THREE.Vector3(),life:0.4,maxLife:0.4,type:'glow'};
+               scene.add(g);skillFX.push(g);
                if(e.userData.hp<=0){spawnFX(e.position.clone());_lastKilledEnemy=e;scene.remove(e);enemies.splice(j,1);onKill();}
              }
            }
-           spawnSkillFX(0xff44ff,30);showSkillNotify('🧠 정신폭발!');
+           spawnNova(cp,0xff44ff,18);
+           spawnVortexFX(cp,0xff88ff,12,1.2);
+           showSkillNotify('🧠 정신폭발!');
          }},
     }
   },
@@ -4911,16 +5133,28 @@ function spawnImpactFX(pos){
   scene.add(dust);parts.push(dust);
 }
 
-// 스킬 이펙트 (색상별 화려한 버스트)
+// 스킬 이펙트 (색상별 화려한 버스트 — 다층 링/기둥/지면 룬/스파크)
 function spawnSkillFX(color, count, pos){
   const origin=pos||yawObj.position;
   const cx=origin.x, cy=origin.y, cz=origin.z;
 
-  // 중앙 글로우
+  // 중앙 글로우 (큰 + 작은 빠른 페이드)
   const glow=_makeParticle('glow',color,0.5+count*0.015);
   glow.position.set(cx,cy+1.2,cz);
   glow.userData={vel:new THREE.Vector3(0,0.5,0),life:0.4,maxLife:0.4,type:'glow'};
   scene.add(glow);skillFX.push(glow);
+
+  const inner=_makeParticle('glow',0xffffff,0.35);
+  inner.position.set(cx,cy+1.2,cz);
+  inner.userData={vel:new THREE.Vector3(),life:0.18,maxLife:0.18,type:'glow'};
+  scene.add(inner);skillFX.push(inner);
+
+  // 수직 광주(빛 기둥) — 짧고 강렬
+  const colMat=new THREE.MeshBasicMaterial({color,transparent:true,opacity:0.55,depthWrite:false,side:THREE.DoubleSide});
+  const col=new THREE.Mesh(_geoCache.cylBeam,colMat);
+  col.position.set(cx,cy+2.5,cz);col.scale.set(0.4,5,0.4);col._baseScale=0.4;
+  col.userData={vel:new THREE.Vector3(),life:0.32,maxLife:0.32,type:'column',startOpacity:0.55,startScaleY:5};
+  scene.add(col);skillFX.push(col);
 
   // 스파크 버스트
   for(let i=0;i<count;i++){
@@ -4933,13 +5167,459 @@ function spawnSkillFX(color, count, pos){
     if(p.userData.type==='spark')p.lookAt(p.position.clone().add(p.userData.vel));
     scene.add(p);skillFX.push(p);
   }
-  // 충격파 링
-  const ring=new THREE.Mesh(_geoCache.ring06,new THREE.MeshBasicMaterial({color,transparent:true,opacity:0.9,depthWrite:false}));
-  ring.scale.setScalar(0.1);ring._baseScale=0.1;
-  ring.rotation.x=Math.PI/2;ring.position.set(cx,cy+0.15,cz);
-  ring.userData={vel:new THREE.Vector3(),life:0.35,maxLife:0.35,type:'shockwave',color};
+
+  // 2중 충격파 링 (시간차)
+  for(let r=0;r<2;r++){
+    const ring=new THREE.Mesh(r===0?_geoCache.ring06:_geoCache.ring015,new THREE.MeshBasicMaterial({color:r===0?color:0xffffff,transparent:true,opacity:0.9,depthWrite:false}));
+    ring.scale.setScalar(0.1);ring._baseScale=0.1;
+    ring.rotation.x=Math.PI/2;ring.position.set(cx,cy+0.15+r*0.04,cz);
+    ring.userData={vel:new THREE.Vector3(),life:0.35+r*0.12,maxLife:0.35+r*0.12,type:'shockwave',color};
+    scene.add(ring);skillFX.push(ring);
+  }
+
+  // 지면 룬 (평면 링)
+  const sigil=new THREE.Mesh(_geoCache.ringFlat,new THREE.MeshBasicMaterial({color,transparent:true,opacity:0.6,depthWrite:false,side:THREE.DoubleSide}));
+  sigil.rotation.x=-Math.PI/2;sigil.position.set(cx,cy+0.05,cz);
+  sigil.scale.setScalar(2.2);sigil._baseScale=2.2;
+  sigil.userData={vel:new THREE.Vector3(),life:0.6,maxLife:0.6,type:'sigil',startOpacity:0.6,spinSpd:2};
+  scene.add(sigil);skillFX.push(sigil);
+}
+
+// ── 신규 스킬 비주얼 헬퍼들 ──────────────────────────
+
+// 검광 슬래시 (직선 검기) — origin 에서 dir 방향으로 length 만큼
+function spawnSlashFX(origin, dir, length, color){
+  const cx=origin.x, cy=origin.y, cz=origin.z;
+  const mid=new THREE.Vector3(cx+dir.x*length*0.5,cy,cz+dir.z*length*0.5);
+  const end=new THREE.Vector3(cx+dir.x*length,cy,cz+dir.z*length);
+  // 메인 슬래시 평면 (수평으로 누워있는 검광)
+  const mat=new THREE.MeshBasicMaterial({color,transparent:true,opacity:1,depthWrite:false,side:THREE.DoubleSide});
+  const slash=new THREE.Mesh(_geoCache.beamPlane,mat);
+  slash.position.copy(mid);
+  slash.lookAt(end);slash.rotateX(-Math.PI/2);
+  slash.scale.set(0.6,length,1);slash._baseScale=length;
+  slash.userData={vel:new THREE.Vector3(),life:0.22,maxLife:0.22,type:'fade',startOpacity:1};
+  scene.add(slash);skillFX.push(slash);
+  // 보조 흰 검광 (살짝 위)
+  const mat2=new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:0.9,depthWrite:false,side:THREE.DoubleSide});
+  const slash2=new THREE.Mesh(_geoCache.beamPlane,mat2);
+  slash2.position.copy(mid).setY(cy+0.4);
+  slash2.lookAt(new THREE.Vector3(end.x,cy+0.4,end.z));slash2.rotateX(-Math.PI/2);
+  slash2.scale.set(0.18,length*0.9,1);slash2._baseScale=length*0.9;
+  slash2.userData={vel:new THREE.Vector3(),life:0.14,maxLife:0.14,type:'fade',startOpacity:0.9};
+  scene.add(slash2);skillFX.push(slash2);
+  // 시작점 글로우
+  const startGlow=_makeParticle('glow',color,0.7);
+  startGlow.position.set(cx,cy,cz);
+  startGlow.userData={vel:new THREE.Vector3(),life:0.2,maxLife:0.2,type:'glow'};
+  scene.add(startGlow);skillFX.push(startGlow);
+  // 끝점 임팩트
+  const endGlow=_makeParticle('glow',0xffffff,0.5);
+  endGlow.position.set(cx+dir.x*length,cy,cz+dir.z*length);
+  endGlow.userData={vel:new THREE.Vector3(),life:0.25,maxLife:0.25,type:'glow'};
+  scene.add(endGlow);skillFX.push(endGlow);
+  // 라인 따라 6개 sparks
+  for(let i=0;i<6;i++){
+    const t=Math.random();
+    const sp=_makeParticle('spark',color,0.05);
+    sp.position.set(cx+dir.x*length*t+(Math.random()-0.5)*0.4,cy+(Math.random()-0.5)*0.6,cz+dir.z*length*t+(Math.random()-0.5)*0.4);
+    sp.userData={vel:new THREE.Vector3((Math.random()-0.5)*4,Math.random()*4,(Math.random()-0.5)*4),life:0.25+Math.random()*0.2,maxLife:0.5,type:'spark'};
+    sp.lookAt(sp.position.clone().add(sp.userData.vel));
+    scene.add(sp);skillFX.push(sp);
+  }
+}
+
+// 베인 적 임팩트 — 작은 슬래시 가위표
+function spawnSlashImpactFX(pos){
+  for(let k=0;k<2;k++){
+    const mat=new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:1,depthWrite:false,side:THREE.DoubleSide});
+    const sl=new THREE.Mesh(_geoCache.beamPlane,mat);
+    sl.position.copy(pos);
+    sl.scale.set(1.2,0.18,1);sl._baseScale=1.2;
+    sl.rotation.z=k===0?-0.6:0.6;
+    sl.rotation.y=Math.random()*Math.PI*2;
+    sl.userData={vel:new THREE.Vector3(),life:0.18,maxLife:0.18,type:'fade',startOpacity:1};
+    scene.add(sl);skillFX.push(sl);
+  }
+  for(let i=0;i<6;i++){
+    const sp=_makeParticle('spark',0xffeeaa,0.04);
+    sp.position.copy(pos);
+    const ang=Math.random()*Math.PI*2,spd=3+Math.random()*5;
+    sp.userData={vel:new THREE.Vector3(Math.cos(ang)*spd,Math.random()*3,Math.sin(ang)*spd),life:0.2+Math.random()*0.2,maxLife:0.4,type:'spark'};
+    sp.lookAt(sp.position.clone().add(sp.userData.vel));
+    scene.add(sp);skillFX.push(sp);
+  }
+}
+
+// 대시/회피 잔상 펄스 — 위치에 시간차 푸른 잔상
+function spawnAfterimagePulse(pos,color){
+  for(let i=0;i<4;i++){
+    setTimeout(()=>{
+      const mat=new THREE.MeshBasicMaterial({color,transparent:true,opacity:0.55,depthWrite:false});
+      const m=new THREE.Mesh(_geoCache.sphereXL,mat);
+      m.position.set(pos.x,pos.y+1.4,pos.z);
+      m.scale.setScalar(0.5+i*0.08);m._baseScale=0.5+i*0.08;
+      m.userData={vel:new THREE.Vector3(),life:0.35,maxLife:0.35,type:'fadeGrow',startOpacity:0.55,growFactor:2.5};
+      scene.add(m);skillFX.push(m);
+    },i*40);
+  }
+  // 발 아래 링
+  const ring=new THREE.Mesh(_geoCache.ringFlat,new THREE.MeshBasicMaterial({color,transparent:true,opacity:0.8,depthWrite:false,side:THREE.DoubleSide}));
+  ring.rotation.x=-Math.PI/2;ring.position.set(pos.x,pos.y+0.05,pos.z);
+  ring.scale.setScalar(0.5);ring._baseScale=0.5;
+  ring.userData={vel:new THREE.Vector3(),life:0.5,maxLife:0.5,type:'shockwave',color};
   scene.add(ring);skillFX.push(ring);
 }
+
+// 대시 스트릭 (긴 박스가 빠르게 날아감)
+function spawnDashStreaks(pos,color){
+  for(let i=0;i<6;i++){
+    const mat=new THREE.MeshBasicMaterial({color,transparent:true,opacity:0.8,depthWrite:false});
+    const s=new THREE.Mesh(_geoCache.streak,mat);
+    const ang=Math.random()*Math.PI*2,r=0.4+Math.random()*0.6;
+    s.position.set(pos.x+Math.cos(ang)*r,pos.y+0.5+Math.random()*1.6,pos.z+Math.sin(ang)*r);
+    s.scale.set(1.5+Math.random()*1.2,1,1);s._baseScale=1.5;
+    s.rotation.y=ang+Math.PI/2;
+    s.userData={vel:new THREE.Vector3(Math.cos(ang)*8,Math.random()*2-1,Math.sin(ang)*8),life:0.25+Math.random()*0.15,maxLife:0.4,type:'streak',startOpacity:0.8};
+    scene.add(s);skillFX.push(s);
+  }
+}
+
+// 무한검극 한 틱 — 회전하는 검광 + 작은 링
+function spawnSwordStormBurst(pos,color){
+  for(let k=0;k<3;k++){
+    const ang=Math.random()*Math.PI*2;
+    const mat=new THREE.MeshBasicMaterial({color,transparent:true,opacity:0.95,depthWrite:false,side:THREE.DoubleSide});
+    const blade=new THREE.Mesh(_geoCache.bladePlane,mat);
+    blade.position.set(pos.x+Math.cos(ang)*1.6,pos.y+1.2+Math.random()*0.6,pos.z+Math.sin(ang)*1.6);
+    blade.rotation.y=ang;
+    blade.rotation.z=(Math.random()-0.5)*1.2;
+    blade.scale.set(2.5,1,1);blade._baseScale=2.5;
+    blade.userData={vel:new THREE.Vector3(),life:0.2,maxLife:0.2,type:'fade',startOpacity:0.95};
+    scene.add(blade);skillFX.push(blade);
+  }
+  const ring=new THREE.Mesh(_geoCache.ringThin,new THREE.MeshBasicMaterial({color,transparent:true,opacity:0.85,depthWrite:false}));
+  ring.scale.setScalar(0.4);ring._baseScale=0.4;
+  ring.rotation.x=Math.PI/2;ring.position.set(pos.x,pos.y+0.9,pos.z);
+  ring.userData={vel:new THREE.Vector3(),life:0.4,maxLife:0.4,type:'shockwave',color};
+  scene.add(ring);skillFX.push(ring);
+}
+
+// 빔 (직선 광선 — 저격/네크로 뼈창/사냥꾼 독화살 등)
+function spawnBeamFX(origin,dir,length,color){
+  const cx=origin.x,cy=origin.y,cz=origin.z;
+  const mid=new THREE.Vector3(cx+dir.x*length*0.5,cy,cz+dir.z*length*0.5);
+  const end=new THREE.Vector3(cx+dir.x*length,cy,cz+dir.z*length);
+  // 외곽 빔
+  const outMat=new THREE.MeshBasicMaterial({color,transparent:true,opacity:0.65,depthWrite:false,side:THREE.DoubleSide});
+  const beam=new THREE.Mesh(_geoCache.cylBeam,outMat);
+  beam.position.copy(mid);
+  beam.lookAt(end);beam.rotateX(Math.PI/2);
+  beam.scale.set(0.35,length,0.35);beam._baseScale=0.35;
+  beam.userData={vel:new THREE.Vector3(),life:0.35,maxLife:0.35,type:'fade',startOpacity:0.65};
+  scene.add(beam);skillFX.push(beam);
+  // 코어 (흰)
+  const cMat=new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:0.95,depthWrite:false,side:THREE.DoubleSide});
+  const core=new THREE.Mesh(_geoCache.cylBeam,cMat);
+  core.position.copy(mid);
+  core.lookAt(end);core.rotateX(Math.PI/2);
+  core.scale.set(0.12,length,0.12);core._baseScale=0.12;
+  core.userData={vel:new THREE.Vector3(),life:0.22,maxLife:0.22,type:'fade',startOpacity:0.95};
+  scene.add(core);skillFX.push(core);
+  // 시작 + 끝 글로우
+  const sg=_makeParticle('glow',color,0.6);sg.position.set(cx,cy,cz);
+  sg.userData={vel:new THREE.Vector3(),life:0.25,maxLife:0.25,type:'glow'};
+  scene.add(sg);skillFX.push(sg);
+  const eg=_makeParticle('glow',color,0.5);eg.position.set(cx+dir.x*length,cy,cz+dir.z*length);
+  eg.userData={vel:new THREE.Vector3(),life:0.3,maxLife:0.3,type:'glow'};
+  scene.add(eg);skillFX.push(eg);
+}
+
+// 노바 (대형 광역 — 다층 링 + 색상 폭발)
+function spawnNova(pos,color,radius){
+  const cx=pos.x,cy=pos.y,cz=pos.z;
+  // 큰 글로우
+  const glow=_makeParticle('glow',color,1.2);
+  glow.position.set(cx,cy+1.3,cz);
+  glow.userData={vel:new THREE.Vector3(),life:0.4,maxLife:0.4,type:'glow'};
+  scene.add(glow);skillFX.push(glow);
+  // 흰 코어
+  const core=_makeParticle('glow',0xffffff,0.7);
+  core.position.set(cx,cy+1.3,cz);
+  core.userData={vel:new THREE.Vector3(),life:0.2,maxLife:0.2,type:'glow'};
+  scene.add(core);skillFX.push(core);
+  // 3단 충격파 링
+  for(let r=0;r<3;r++){
+    setTimeout(()=>{
+      const ring=new THREE.Mesh(r===1?_geoCache.ring015:r===0?_geoCache.ring06:_geoCache.ring08,
+        new THREE.MeshBasicMaterial({color:r===1?0xffffff:color,transparent:true,opacity:0.9,depthWrite:false}));
+      ring.scale.setScalar(0.15);ring._baseScale=0.15*(radius/8);
+      ring.rotation.x=Math.PI/2;ring.position.set(cx,cy+0.15+r*0.05,cz);
+      ring.userData={vel:new THREE.Vector3(),life:0.5+r*0.1,maxLife:0.5+r*0.1,type:'shockwave',color};
+      scene.add(ring);skillFX.push(ring);
+    },r*80);
+  }
+  // 외곽 방사형 sparks
+  for(let i=0;i<22;i++){
+    const ang=i/22*Math.PI*2;
+    const sp=_makeParticle(i%2===0?'spark':'ember',color,0.07);
+    sp.position.set(cx,cy+1.0+Math.random()*0.5,cz);
+    const spd=8+Math.random()*8;
+    sp.userData={vel:new THREE.Vector3(Math.cos(ang)*spd,1+Math.random()*3,Math.sin(ang)*spd),life:0.6+Math.random()*0.4,maxLife:1.0,type:'spark'};
+    if(sp.userData.type==='spark')sp.lookAt(sp.position.clone().add(sp.userData.vel));
+    scene.add(sp);skillFX.push(sp);
+  }
+  // 광주
+  const cm=new THREE.MeshBasicMaterial({color,transparent:true,opacity:0.6,depthWrite:false,side:THREE.DoubleSide});
+  const col=new THREE.Mesh(_geoCache.cylBeam,cm);
+  col.position.set(cx,cy+3,cz);col.scale.set(0.8,6,0.8);col._baseScale=0.8;
+  col.userData={vel:new THREE.Vector3(),life:0.5,maxLife:0.5,type:'column',startOpacity:0.6,startScaleY:6};
+  scene.add(col);skillFX.push(col);
+  // 지면 룬
+  const sigil=new THREE.Mesh(_geoCache.ringFlatThick,new THREE.MeshBasicMaterial({color,transparent:true,opacity:0.7,depthWrite:false,side:THREE.DoubleSide}));
+  sigil.rotation.x=-Math.PI/2;sigil.position.set(cx,cy+0.05,cz);
+  sigil.scale.setScalar(radius*0.6);sigil._baseScale=radius*0.6;
+  sigil.userData={vel:new THREE.Vector3(),life:0.9,maxLife:0.9,type:'sigil',startOpacity:0.7,spinSpd:1.5};
+  scene.add(sigil);skillFX.push(sigil);
+}
+
+// 지면 룬 (지속형 — 화염지대/오라 등에 사용)
+function spawnGroundSigil(pos,color,radius,duration){
+  const sigil=new THREE.Mesh(_geoCache.ringFlatThick,new THREE.MeshBasicMaterial({color,transparent:true,opacity:0.5,depthWrite:false,side:THREE.DoubleSide}));
+  sigil.rotation.x=-Math.PI/2;sigil.position.set(pos.x,pos.y+0.04,pos.z);
+  sigil.scale.setScalar(radius);sigil._baseScale=radius;
+  sigil.userData={vel:new THREE.Vector3(),life:duration,maxLife:duration,type:'sigil',startOpacity:0.5,spinSpd:0.8};
+  scene.add(sigil);skillFX.push(sigil);
+  // 내부 흰 작은 링
+  const inner=new THREE.Mesh(_geoCache.ringFlat,new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:0.4,depthWrite:false,side:THREE.DoubleSide}));
+  inner.rotation.x=-Math.PI/2;inner.position.set(pos.x,pos.y+0.06,pos.z);
+  inner.scale.setScalar(radius*0.6);inner._baseScale=radius*0.6;
+  inner.userData={vel:new THREE.Vector3(),life:duration,maxLife:duration,type:'sigil',startOpacity:0.4,spinSpd:-1.6};
+  scene.add(inner);skillFX.push(inner);
+}
+
+// 회복 오라 — 위로 솟는 녹색 입자
+function spawnHealAura(pos,color){
+  for(let i=0;i<14;i++){
+    const ang=Math.random()*Math.PI*2,r=Math.random()*0.8;
+    const sp=_makeParticle('ember',color||0x66ff99,0.08+Math.random()*0.06);
+    sp.position.set(pos.x+Math.cos(ang)*r,pos.y+0.2,pos.z+Math.sin(ang)*r);
+    sp.userData={vel:new THREE.Vector3(),life:0.7+Math.random()*0.5,maxLife:1.2,type:'heal',riseSpd:1.5+Math.random(),startOpacity:0.95};
+    scene.add(sp);skillFX.push(sp);
+  }
+  // 십자가 광채
+  const cm=new THREE.MeshBasicMaterial({color:color||0x66ff99,transparent:true,opacity:0.9,depthWrite:false,side:THREE.DoubleSide});
+  const c1=new THREE.Mesh(_geoCache.cross,cm);
+  c1.position.set(pos.x,pos.y+1.5,pos.z);c1.scale.set(0.18,1.2,1);c1._baseScale=0.18;
+  c1.userData={vel:new THREE.Vector3(),life:0.6,maxLife:0.6,type:'fade',startOpacity:0.9};
+  scene.add(c1);skillFX.push(c1);
+  const c2=new THREE.Mesh(_geoCache.cross,cm.clone());
+  c2.position.set(pos.x,pos.y+1.5,pos.z);c2.scale.set(1,0.18,1);c2._baseScale=1;
+  c2.userData={vel:new THREE.Vector3(),life:0.6,maxLife:0.6,type:'fade',startOpacity:0.9};
+  scene.add(c2);skillFX.push(c2);
+  // 글로우
+  const g=_makeParticle('glow',color||0x66ff99,0.6);
+  g.position.set(pos.x,pos.y+1.2,pos.z);
+  g.userData={vel:new THREE.Vector3(),life:0.5,maxLife:0.5,type:'glow'};
+  scene.add(g);skillFX.push(g);
+  // 지면 링
+  const ring=new THREE.Mesh(_geoCache.ringFlat,new THREE.MeshBasicMaterial({color:color||0x66ff99,transparent:true,opacity:0.7,depthWrite:false,side:THREE.DoubleSide}));
+  ring.rotation.x=-Math.PI/2;ring.position.set(pos.x,pos.y+0.05,pos.z);
+  ring.scale.setScalar(0.5);ring._baseScale=0.5;
+  ring.userData={vel:new THREE.Vector3(),life:0.6,maxLife:0.6,type:'shockwave',color:color||0x66ff99};
+  scene.add(ring);skillFX.push(ring);
+}
+
+// 번개 호 (해커 EMP, 정신술사 등)
+function spawnLightningArc(from,to,color){
+  const segs=8;
+  const dir=new THREE.Vector3().subVectors(to,from);
+  const len=dir.length();
+  if(len<0.001)return;
+  let prev=from.clone();
+  for(let i=1;i<=segs;i++){
+    const t=i/segs;
+    const next=from.clone().addScaledVector(dir,t);
+    if(i<segs){
+      next.x+=(Math.random()-0.5)*len*0.08;
+      next.y+=(Math.random()-0.5)*len*0.08;
+      next.z+=(Math.random()-0.5)*len*0.08;
+    }
+    const mid=prev.clone().add(next).multiplyScalar(0.5);
+    const segLen=prev.distanceTo(next);
+    const mat=new THREE.MeshBasicMaterial({color,transparent:true,opacity:1,depthWrite:false,side:THREE.DoubleSide});
+    const seg=new THREE.Mesh(_geoCache.streak,mat);
+    seg.position.copy(mid);
+    seg.scale.set(segLen,1,1);seg._baseScale=segLen;
+    seg.lookAt(next);
+    seg.rotateY(Math.PI/2);
+    seg.userData={vel:new THREE.Vector3(),life:0.18+Math.random()*0.08,maxLife:0.26,type:'fade',startOpacity:1};
+    scene.add(seg);skillFX.push(seg);
+    prev=next;
+  }
+}
+
+// 화염 콘 (화염방사기, 인페르노 등) — origin에서 dir 방향으로 펼쳐지는 불꽃
+function spawnFlameConeFX(origin,dir,length,color){
+  const cx=origin.x,cy=origin.y+1.2,cz=origin.z;
+  for(let i=0;i<8;i++){
+    const t=Math.random();
+    const spread=t*length*0.4;
+    const offX=(Math.random()-0.5)*spread,offY=(Math.random()-0.5)*spread*0.5,offZ=(Math.random()-0.5)*spread;
+    const px=cx+dir.x*length*t+offX-dir.z*offZ,pz=cz+dir.z*length*t+offZ+dir.x*offX,py=cy+offY;
+    const sp=_makeParticle('ember',color||0xff6600,0.18+Math.random()*0.12);
+    sp.position.set(px,py,pz);
+    sp.userData={vel:new THREE.Vector3(dir.x*4+(Math.random()-0.5)*2,1+Math.random()*1,dir.z*4+(Math.random()-0.5)*2),life:0.35+Math.random()*0.25,maxLife:0.6,type:'ember'};
+    scene.add(sp);skillFX.push(sp);
+  }
+  // 연기
+  for(let i=0;i<3;i++){
+    const t=0.3+Math.random()*0.6;
+    const sm=_makeParticle('smoke',0,0.25);
+    sm.position.set(cx+dir.x*length*t,cy+0.3,cz+dir.z*length*t);
+    sm.userData={vel:new THREE.Vector3(dir.x*2,1,dir.z*2),life:0.6,maxLife:0.6,type:'smoke',startSize:1};
+    scene.add(sm);skillFX.push(sm);
+  }
+}
+
+// 보텍스 (회오리) — 중심 주위로 회전하는 입자들
+function spawnVortexFX(pos,color,count,duration){
+  for(let i=0;i<count;i++){
+    const r=1.2+Math.random()*1.5;
+    const sp=_makeParticle('ember',color,0.08+Math.random()*0.04);
+    const ang=i/count*Math.PI*2;
+    sp.position.set(pos.x+Math.cos(ang)*r,pos.y+0.5+Math.random()*1.5,pos.z+Math.sin(ang)*r);
+    sp.userData={vel:new THREE.Vector3(),life:duration,maxLife:duration,type:'orbit',
+      angle:ang,angSpd:3+Math.random()*2,r:r,ofy:pos.y+0.5+Math.random()*1.5,
+      cx:pos.x,cz:pos.z,startOpacity:0.9};
+    scene.add(sp);skillFX.push(sp);
+  }
+}
+
+// 영혼 상승 (네크로 영혼 수확)
+function spawnSoulRise(pos,color,count){
+  for(let i=0;i<count;i++){
+    const ang=Math.random()*Math.PI*2,r=0.3+Math.random()*1;
+    const sp=_makeParticle('ember',color,0.1+Math.random()*0.05);
+    sp.position.set(pos.x+Math.cos(ang)*r,pos.y+0.5,pos.z+Math.sin(ang)*r);
+    sp.userData={vel:new THREE.Vector3(),life:1.0+Math.random()*0.4,maxLife:1.4,type:'soul',
+      angle:ang,angSpd:2+Math.random()*2,r:r,cx:pos.x,cz:pos.z,
+      startY:pos.y+0.5,riseH:3+Math.random()*2,startOpacity:0.85};
+    scene.add(sp);skillFX.push(sp);
+  }
+}
+
+// 표식/조준 마커 (사냥꾼 표식, 닌자 암살 대상 등)
+function spawnTargetMarker(pos,color){
+  // 외곽 큰 링
+  const r1=new THREE.Mesh(_geoCache.ringFlat,new THREE.MeshBasicMaterial({color,transparent:true,opacity:1,depthWrite:false,side:THREE.DoubleSide}));
+  r1.position.copy(pos);r1.scale.setScalar(1.6);r1._baseScale=1.6;
+  r1.rotation.x=-Math.PI/2;
+  r1.userData={vel:new THREE.Vector3(),life:0.6,maxLife:0.6,type:'fadeGrow',startOpacity:1,growFactor:0.5};
+  scene.add(r1);skillFX.push(r1);
+  // 안쪽 십자
+  for(let k=0;k<2;k++){
+    const m=new THREE.MeshBasicMaterial({color,transparent:true,opacity:1,depthWrite:false,side:THREE.DoubleSide});
+    const c=new THREE.Mesh(_geoCache.cross,m);
+    c.position.copy(pos);
+    if(k===0){c.scale.set(0.15,1.6,1);c._baseScale=0.15;}else{c.scale.set(1.6,0.15,1);c._baseScale=1.6;}
+    c.rotation.x=Math.PI/4;c.rotation.z=Math.PI/4;
+    c.userData={vel:new THREE.Vector3(),life:0.5,maxLife:0.5,type:'fade',startOpacity:1};
+    scene.add(c);skillFX.push(c);
+  }
+  // 글로우
+  const g=_makeParticle('glow',color,0.6);
+  g.position.copy(pos);
+  g.userData={vel:new THREE.Vector3(),life:0.35,maxLife:0.35,type:'glow'};
+  scene.add(g);skillFX.push(g);
+}
+
+// 시계바늘/시간 펄스 (시간술사)
+function spawnTimePulse(pos,color){
+  // 다중 동심 링 (시계 다이얼처럼)
+  for(let r=0;r<4;r++){
+    setTimeout(()=>{
+      const ring=new THREE.Mesh(_geoCache.ringThin,new THREE.MeshBasicMaterial({color,transparent:true,opacity:0.9,depthWrite:false}));
+      ring.scale.setScalar(0.2);ring._baseScale=0.15+r*0.1;
+      ring.rotation.x=Math.PI/2;ring.position.set(pos.x,pos.y+1.0,pos.z);
+      ring.userData={vel:new THREE.Vector3(),life:0.6,maxLife:0.6,type:'shockwave',color};
+      scene.add(ring);skillFX.push(ring);
+    },r*80);
+  }
+  // 12개 시계눈금
+  for(let i=0;i<12;i++){
+    const ang=i/12*Math.PI*2;
+    const sp=_makeParticle('spark',color,0.08);
+    sp.position.set(pos.x+Math.cos(ang)*2,pos.y+1.0,pos.z+Math.sin(ang)*2);
+    sp.userData={vel:new THREE.Vector3(),life:0.6,maxLife:0.6,type:'fade',startOpacity:1};
+    scene.add(sp);skillFX.push(sp);
+  }
+  const g=_makeParticle('glow',color,0.8);
+  g.position.set(pos.x,pos.y+1.2,pos.z);
+  g.userData={vel:new THREE.Vector3(),life:0.4,maxLife:0.4,type:'glow'};
+  scene.add(g);skillFX.push(g);
+}
+
+// 텔레키네시스 — 사이오닉 손/그립
+function spawnPsiGrip(pos,color){
+  // 4방향 모이는 박스
+  for(let i=0;i<4;i++){
+    const ang=i*Math.PI/2;
+    const mat=new THREE.MeshBasicMaterial({color,transparent:true,opacity:0.9,depthWrite:false});
+    const s=new THREE.Mesh(_geoCache.streak,mat);
+    s.position.set(pos.x+Math.cos(ang)*1.8,pos.y,pos.z+Math.sin(ang)*1.8);
+    s.scale.set(1.2,1,1);s._baseScale=1.2;
+    s.rotation.y=ang+Math.PI/2;
+    s.userData={vel:new THREE.Vector3(-Math.cos(ang)*5,0,-Math.sin(ang)*5),life:0.35,maxLife:0.35,type:'streak',startOpacity:0.9};
+    scene.add(s);skillFX.push(s);
+  }
+  spawnSkillFX(color,12,pos);
+}
+
+// 부채꼴 (정신술사 정신충격) — 콘 모양 충격파
+function spawnPsiCone(origin,dir,length,color){
+  const cx=origin.x,cy=origin.y+0.1,cz=origin.z;
+  const mid=new THREE.Vector3(cx+dir.x*length*0.5,cy,cz+dir.z*length*0.5);
+  const end=new THREE.Vector3(cx+dir.x*length,cy,cz+dir.z*length);
+  // 부채꼴 메시 — 지면 평행 평면
+  const mat=new THREE.MeshBasicMaterial({color,transparent:true,opacity:0.6,depthWrite:false,side:THREE.DoubleSide});
+  const cone=new THREE.Mesh(_geoCache.beamPlane,mat);
+  cone.position.copy(mid);
+  cone.lookAt(end);cone.rotateX(-Math.PI/2);
+  cone.scale.set(length*0.7,length,1);cone._baseScale=length;
+  cone.userData={vel:new THREE.Vector3(),life:0.4,maxLife:0.4,type:'fade',startOpacity:0.6};
+  scene.add(cone);skillFX.push(cone);
+  // 방사형 sparks
+  for(let i=0;i<14;i++){
+    const a=ang+(Math.random()-0.5)*Math.PI/3;
+    const t=Math.random();
+    const spd=6+Math.random()*6;
+    const sp=_makeParticle('spark',color,0.06);
+    sp.position.set(cx,cy,cz);
+    sp.userData={vel:new THREE.Vector3(Math.sin(a)*spd,Math.random()*2-0.5,Math.cos(a)*spd),life:0.35+Math.random()*0.2,maxLife:0.55,type:'spark'};
+    sp.lookAt(sp.position.clone().add(sp.userData.vel));
+    scene.add(sp);skillFX.push(sp);
+  }
+  const g=_makeParticle('glow',color,0.7);g.position.set(cx,cy,cz);
+  g.userData={vel:new THREE.Vector3(),life:0.3,maxLife:0.3,type:'glow'};
+  scene.add(g);skillFX.push(g);
+}
+
+// 전자전 — 디지털 글리치 (해커 해킹)
+function spawnDigitalGlitch(pos,color){
+  for(let i=0;i<10;i++){
+    const mat=new THREE.MeshBasicMaterial({color,transparent:true,opacity:0.9,depthWrite:false});
+    const m=new THREE.Mesh(_geoCache.streak,mat);
+    m.position.set(pos.x+(Math.random()-0.5)*1.2,pos.y+Math.random()*2.4,pos.z+(Math.random()-0.5)*1.2);
+    m.scale.set(0.6+Math.random()*0.8,1,1);m._baseScale=0.6;
+    m.rotation.y=Math.random()*Math.PI*2;
+    m.userData={vel:new THREE.Vector3(),life:0.2+Math.random()*0.25,maxLife:0.45,type:'fade',startOpacity:0.9};
+    scene.add(m);skillFX.push(m);
+  }
+  // 글리치 후 베이스 펄스
+  spawnSkillFX(color,8,pos);
+}
+// ───────────────────────────────────────────────
 
 // 폭발 이펙트 (수류탄/지뢰)
 function spawnExplosionFX(pos){
@@ -5018,6 +5698,43 @@ function _updateParticleArray(arr, dt){
     } else if(ud.type==='debris'){
       if(ud.rotV)p.rotation.x+=ud.rotV.x*dt,p.rotation.y+=ud.rotV.y*dt,p.rotation.z+=ud.rotV.z*dt;
       if(p.material){p.material.opacity=Math.min(1,t*3);}
+    } else if(ud.type==='fade'){
+      if(p.material){p.material.opacity=(ud.startOpacity||1)*t;}
+    } else if(ud.type==='fadeGrow'){
+      if(p.material){p.material.opacity=(ud.startOpacity||1)*t;}
+      p.scale.setScalar(bs*(1+(1-t)*(ud.growFactor||2)));
+    } else if(ud.type==='streak'){
+      if(p.material){p.material.opacity=t*(ud.startOpacity||1);}
+    } else if(ud.type==='orbit'){
+      const r=ud.r||1, sp=ud.angSpd||4, ofy=ud.ofy||1.5;
+      ud.angle=(ud.angle||0)+sp*dt;
+      const cx=ud.cx||0,cz=ud.cz||0;
+      p.position.set(cx+Math.cos(ud.angle)*r,ofy+Math.sin((ud.angle||0)*2)*0.2,cz+Math.sin(ud.angle)*r);
+      if(ud.faceCenter){p.rotation.y=-ud.angle+Math.PI/2;}
+      if(p.material){p.material.opacity=t*(ud.startOpacity||0.9);}
+    } else if(ud.type==='column'){
+      if(p.material){p.material.opacity=t*(ud.startOpacity||0.7);}
+      p.scale.y=(ud.startScaleY||1)*(0.6+t*0.4);
+    } else if(ud.type==='sigil'){
+      // Pulsing flat ground rune — opacity sinusoidal until end fadeout
+      const fadeWin=0.4;
+      if(p.material){
+        const op=(ud.startOpacity||0.7)*(0.7+0.3*Math.sin((ud.maxLife-ud.life)*6));
+        p.material.opacity=ud.life<fadeWin?op*(ud.life/fadeWin):op;
+      }
+      p.rotation.z=(ud.maxLife-ud.life)*(ud.spinSpd||1.2);
+    } else if(ud.type==='heal'){
+      // Rising green particle
+      p.position.y+=(ud.riseSpd||1.8)*dt;
+      if(p.material){p.material.opacity=t*(ud.startOpacity||0.95);}
+      p.scale.setScalar(bs*(0.7+t*0.3));
+    } else if(ud.type==='soul'){
+      // Rising soul wisp — slow rise + swirl
+      ud.angle=(ud.angle||0)+(ud.angSpd||3)*dt;
+      const r=(ud.r||0.4)*(0.5+(1-t)*0.5);
+      p.position.set((ud.cx||0)+Math.cos(ud.angle)*r,(ud.startY||1)+(1-t)*(ud.riseH||4),(ud.cz||0)+Math.sin(ud.angle)*r);
+      if(p.material){p.material.opacity=t*(ud.startOpacity||0.85);}
+      p.scale.setScalar(bs*(0.5+t*0.5));
     }
   }
 }
