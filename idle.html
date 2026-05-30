@@ -186,6 +186,7 @@
         <div class="tab active" data-tab="hero">🛡️ 동료</div>
         <div class="tab" data-tab="up">⬆️ 강화</div>
         <div class="tab" data-tab="gem">💎 정수상점</div>
+        <div class="tab" data-tab="end">🏆 엔딩</div>
       </div>
       <div id="shopList"></div>
     </div>
@@ -239,6 +240,11 @@ const GEMSHOP=[
   {id:'gStart',nm:'개척자',      ico:'🚩', sub:'환생 후 시작 스테이지 +2 / 레벨', baseCost:3, mult:2.2, key:'gStart'},
 ];
 
+// ── 엔딩 아이템: 구매 시 게임 클리어 ──
+const ENDING={ ico:'🌳', nm:'세계수의 열매',
+  sub:'전설의 엔딩 아이템 — 구매하면 게임 클리어!',
+  goldCost:1e12, gemCost:20 };
+
 const MOBS=['👾','🦂','🕷️','🐍','🦇','🐗','👹','👺','🧟','🦅','🪰','🐙','🦴','👻'];
 const MOB_NAMES=['슬라임','전갈','거미','독사','박쥐','멧돼지','오우거','고블린','좀비','하피','독충','심해수','해골','원혼'];
 const BOSSES=['🐉','👿','💀','🦖','👹','🐲','🦑','☠️'];
@@ -250,7 +256,7 @@ function defaultState(){
     gold:0, gems:0, stage:1, maxStage:1, frontier:1,
     heroes:{}, upg:{click:0,dmg:0,gold:0}, gem:{gALL:0,gGold:0,gStart:0},
     autoProgress:true, killsThisStage:0, lastSeen:Date.now(),
-    totalKills:0,
+    totalKills:0, cleared:false,
   };
 }
 
@@ -579,7 +585,7 @@ let activeTab='hero';
 document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{
   activeTab=t.dataset.tab;
   document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('active',x===t));
-  $('buyMaxBtn').style.display=activeTab==='gem'?'none':'';
+  $('buyMaxBtn').style.display=(activeTab==='gem'||activeTab==='end')?'none':'';
   renderShop();
 });
 function renderShop(){
@@ -609,7 +615,7 @@ function renderShop(){
         onclick:()=>{ if(S.gold<sum)return; S.gold-=sum; S.upg[u.id]=have+n; updateTop();renderShop();flashSave(); }
       }));
     });
-  }else{ // gem
+  }else if(activeTab==='gem'){
     GEMSHOP.forEach(g=>{
       const have=S.gem[g.key]||0;
       const cost=Math.ceil(g.baseCost*Math.pow(g.mult,have));
@@ -623,6 +629,41 @@ function renderShop(){
     const info=document.createElement('div');
     info.style.cssText='font-size:11px;color:var(--dim);text-align:center;padding:8px;line-height:1.6';
     info.innerHTML=`💎 정수는 <b>환생</b>으로 획득합니다.<br>현재 환생 시 <b style="color:var(--gem)">${gemsFromPrestige()}</b>개 획득 (최고 스테이지 ${S.maxStage} 기준)`;
+    list.appendChild(info);
+  }else{ // end — 엔딩 아이템
+    const e=ENDING;
+    const goldOk=S.gold>=e.goldCost, gemOk=S.gems>=e.gemCost, ok=goldOk&&gemOk;
+    if(S.cleared){
+      list.appendChild(card({
+        ico:'🏆', nm:'클리어 완료!', sub:'이 세계를 구원했습니다',
+        lvl:'계속 플레이 가능 · 카드를 눌러 엔딩 다시 보기', cost:'🎬 다시 보기',
+        costCls:'ok', onclick:()=>showEnding(false)
+      }));
+    }
+    list.appendChild(card({
+      ico:e.ico, nm:e.nm, sub:e.sub,
+      lvl:`💰 ${fmt(S.gold)} / ${fmt(e.goldCost)}　·　💎 ${fmt(S.gems)} / ${e.gemCost}`,
+      cost: ok?'✨ 구매!' : (!goldOk?'💰 부족':'💎 부족'),
+      costCls: ok?'ok':'no', locked:!ok,
+      onclick:()=>{
+        if(S.gold<e.goldCost||S.gems<e.gemCost)return;
+        S.gold-=e.goldCost; S.gems-=e.gemCost; S.cleared=true;
+        updateTop(); renderShop(); flashSave(); showEnding(true);
+      }
+    }));
+    const goldPct=Math.min(100,S.gold/e.goldCost*100);
+    const gemPct=Math.min(100,S.gems/e.gemCost*100);
+    const info=document.createElement('div');
+    info.style.cssText='font-size:11px;color:var(--dim);padding:10px;line-height:1.7';
+    info.innerHTML=
+      `🏁 <b>클리어 조건</b>: 위 엔딩 아이템을 구매하세요.<br>`+
+      `<div style="margin:8px 0 2px">💰 골드 ${goldPct.toFixed(1)}%</div>`+
+      `<div style="height:8px;background:#0a0c14;border:1px solid var(--line);border-radius:6px;overflow:hidden">`+
+        `<div style="height:100%;width:${goldPct}%;background:linear-gradient(90deg,#ffce54,#ffaa3b)"></div></div>`+
+      `<div style="margin:8px 0 2px">💎 정수 ${gemPct.toFixed(1)}%</div>`+
+      `<div style="height:8px;background:#0a0c14;border:1px solid var(--line);border-radius:6px;overflow:hidden">`+
+        `<div style="height:100%;width:${gemPct}%;background:linear-gradient(90deg,#7ee0ff,#4fc3ff)"></div></div>`+
+      `<div style="margin-top:8px">정수는 <b>환생</b>으로 모읍니다. 골드는 강화·동료로 불려서 모아보세요!</div>`;
     list.appendChild(info);
   }
 }
@@ -669,10 +710,10 @@ $('prestigeBtn').onclick=()=>{
     [{t:'취소',cls:'',fn:closeModal},{t:'환생!',cls:'ready',fn:()=>{doPrestige(g);closeModal();}}]);
 };
 function doPrestige(g){
-  const keepGems=S.gems+g, gemUp=S.gem;
+  const keepGems=S.gems+g, gemUp=S.gem, wasCleared=S.cleared;
   const startBonus=2*(S.gem.gStart||0);
   S=defaultState();
-  S.gems=keepGems; S.gem=gemUp;
+  S.gems=keepGems; S.gem=gemUp; S.cleared=wasCleared;
   S.stage=S.maxStage=S.frontier=1+startBonus;
   bossReturn=0; if(goblin){goblin.alive=false;$('goblin').style.display='none';}
   spawnMob();updateTop();updateStageLabel();renderShop();save();
@@ -688,6 +729,22 @@ function openModal(title,body,btns){
   $('modalBg').classList.add('show');
 }
 function closeModal(){$('modalBg').classList.remove('show');}
+
+// ── 게임 클리어(엔딩) ──
+function showEnding(first){
+  if(first){
+    showBanner('🏆 게임 클리어!','세계수의 열매를 손에 넣었다!','#ffce54');
+    for(let i=0;i<8;i++) setTimeout(()=>floatNum(['🎉','✨','🏆','💫','🌟'][i%5],true,'#ffce54'),i*120);
+  }
+  openModal('🏆 게임 클리어!',
+    `${first?'<b>세계수의 열매</b>를 손에 넣어 던전의 저주를 끝냈습니다!<br><br>':''}`+
+    `🏅 최고 스테이지 <b>${S.maxStage}</b><br>`+
+    `⚔️ 총 처치 <b>${fmt(S.totalKills)}</b> 마리<br>`+
+    `💎 보유 정수 <b>${fmt(S.gems)}</b><br><br>`+
+    `<span class="big">축하합니다! 🎉</span><br>`+
+    `원한다면 환생·강화를 이어가며 계속 플레이할 수 있어요.`,
+    [{t:'계속 플레이',cls:'ready',fn:closeModal}]);
+}
 
 // ── 저장 / 불러오기 ──
 let saveFlash=0;
