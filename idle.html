@@ -326,14 +326,26 @@ function heroFx(){
   return fx;
 }
 
+// 직전 보스 스테이지(없으면 0)
+function prevBossStage(stage){ return Math.floor(stage/10)*10; }
 function mobMaxHp(stage,boss){
   let hp=10*Math.pow(1.55,stage-1);
   if(boss)hp*=14;
+  else if(!isBossStage(stage)){
+    // 보스를 잡은 뒤 나오는 애드는 직전 보스보다 더 단단하다
+    const pb=prevBossStage(stage);
+    if(pb>=10) hp=Math.max(hp, 10*Math.pow(1.55,pb-1)*14*1.25);
+  }
   return Math.ceil(hp);
 }
 function goldReward(stage,boss){
   let g=6*Math.pow(1.24,stage-1);   // 스테이지가 오를수록 골드 급증
   if(boss)g*=35;                    // 보스는 훨씬 더 많이
+  else if(!isBossStage(stage)){
+    // 보스를 잡은 뒤 나오는 애드는 직전 보스보다 더 짭짤한 골드를 준다
+    const pb=prevBossStage(stage);
+    if(pb>=10) g=Math.max(g, 6*Math.pow(1.24,pb-1)*35*1.6);
+  }
   return Math.ceil(g*goldMult()*heroFx().gold);
 }
 function isBossStage(st){return st%10===0;}
@@ -399,13 +411,10 @@ function dealDamage(amt,fromClick,crit){
 }
 function onKill(){
   // 보스 도주 중 부하 처치: 스테이지 전진 없이 골드만, 보스 재등장 시간 단축
-  // 부하는 보스보다 더 짭짤한 골드를 준다(도주한 보스를 추격하는 보상).
   if(mob.phase==='fled'){
-    const loot=Math.ceil(goldReward(S.stage,true)*1.5);
-    S.gold+=loot;
+    S.gold+=goldReward(S.stage,false);
     S.totalKills++;
     bossReturn=Math.max(0,bossReturn-2);
-    floatNum('💰 부하 약탈 +'+fmt(loot),false,'#ffce54');
     floatNum('보스 재등장 -2초',false,'#7ee0ff');
     spawnMob('minion');
     updateTop();
