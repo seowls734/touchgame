@@ -470,8 +470,8 @@ function isBossStage(st){return st%10===0;}
 function killsNeeded(st){return isBossStage(st)?1:4;} // 일반 스테이지는 4킬마다 전진
 
 // ── 환생(프레스티지) 보상 ──
-// 환생할 때마다 다음 환생에 필요한 최소 스테이지가 15씩 올라간다.
-function prestigeReqStage(){ return 25+15*(S.prestiges||0); }
+// 환생할 때마다 다음 환생에 필요한 최소 스테이지가 10씩 올라간다.
+function prestigeReqStage(){ return 20+10*(S.prestiges||0); }
 function gemsFromPrestige(){
   if(S.maxStage<prestigeReqStage())return 0;
   return Math.floor(Math.pow(S.maxStage/10,1.7));
