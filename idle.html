@@ -518,6 +518,7 @@ window.addEventListener('keydown',e=>{
 
 // ── 메인 루프 ──
 let lastTick=Date.now();
+let dpsAccum=0, dpsTimer=0;          // 동료 자동공격 누적(0.5초마다 떠오르는 숫자로 표시)
 function tick(){
   const now=Date.now(); let dt=(now-lastTick)/1000; lastTick=now;
   if(dt>1)dt=1;
@@ -526,7 +527,12 @@ function tick(){
     if(mob.timer<=0){ floatNum('보스 도주!',false,'#ff5a78'); S.killsThisStage=0; spawnMob(); }
   }
   const d=totalDps();
-  if(d>0&&mob.hp>0)dealDamage(d*dt,false);
+  if(d>0&&mob.hp>0){
+    dealDamage(d*dt,false);
+    // 동료가 공격하고 있다는 걸 보여주기 위한 시각 피드백
+    dpsAccum+=d*dt; dpsTimer+=dt;
+    if(dpsTimer>=0.5){ floatNum(dpsAccum,false,'#8fe36b'); dpsAccum=0; dpsTimer=0; }
+  }
   renderHp();
 }
 setInterval(tick,100);
