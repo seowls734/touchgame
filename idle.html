@@ -206,9 +206,9 @@ const UPGRADES=[
 ];
 // ── 정수(환생) 상점: 영구 강화 ──
 const GEMSHOP=[
-  {id:'gAll',  nm:'영웅의 유산', ico:'🌟', sub:'모든 피해 +15% / 레벨',         baseCost:1, mult:1.6, key:'gALL'},
-  {id:'gGold', nm:'탐욕의 인장', ico:'🪙', sub:'골드 획득 +25% / 레벨',         baseCost:1, mult:1.7, key:'gGold'},
-  {id:'gStart',nm:'개척자',      ico:'🚩', sub:'환생 후 시작 스테이지 +2 / 레벨', baseCost:3, mult:2.2, key:'gStart'},
+  {id:'gAll',  nm:'영웅의 유산', ico:'🌟', sub:'모든 피해 +25% / 레벨',         baseCost:1, mult:1.35, key:'gALL'},
+  {id:'gGold', nm:'탐욕의 인장', ico:'🪙', sub:'골드 획득 +30% / 레벨',         baseCost:1, mult:1.4,  key:'gGold'},
+  {id:'gStart',nm:'개척자',      ico:'🚩', sub:'환생 후 시작 스테이지 +3 / 레벨', baseCost:2, mult:1.6,  key:'gStart'},
 ];
 
 const MOBS=['👾','🦂','🕷️','🐍','🦇','🐗','👹','👺','🧟','🦅','🪰','🐙','🦴','👻'];
@@ -299,8 +299,8 @@ function totalDps(){
   d*=heroFx().dps;               // 동료 특수 능력
   return d;
 }
-function goldMult(){ return Math.pow(1.20,S.upg.gold)*Math.pow(1.25,S.gem.gGold||0); }
-function gemAllMult(){ return 1+0.15*(S.gem.gALL||0); }
+function goldMult(){ return Math.pow(1.20,S.upg.gold)*Math.pow(1.30,S.gem.gGold||0); }
+function gemAllMult(){ return 1+0.25*(S.gem.gALL||0); }
 
 // 동료 특수 능력 합산 → 각종 보정치
 function heroFx(){
@@ -342,7 +342,7 @@ function killsNeeded(st){return isBossStage(st)?1:4;} // 일반 스테이지는 
 // ── 환생(프레스티지) 보상 ──
 function gemsFromPrestige(){
   if(S.maxStage<25)return 0;
-  return Math.floor(Math.pow(S.maxStage/22,1.45));
+  return Math.floor(Math.pow(S.maxStage/10,1.7));
 }
 
 // ── 몬스터 스폰 ──
@@ -641,10 +641,11 @@ $('prestigeBtn').onclick=()=>{
     [{t:'취소',cls:'',fn:closeModal},{t:'환생!',cls:'ready',fn:()=>{doPrestige(g);closeModal();}}]);
 };
 function doPrestige(g){
-  // 영구 보존: 정수/정수강화/환생횟수/도전과제/최고기록/누적처치
-  const keep={ gems:S.gems+g, gem:S.gem, prestiges:(S.prestiges||0)+1,
+  // 영구 보존: 정수/정수강화(깊은 복사)/환생횟수/도전과제/최고기록/누적처치
+  const keepGem=Object.assign({gALL:0,gGold:0,gStart:0},S.gem||{});
+  const keep={ gems:(S.gems||0)+g, gem:keepGem, prestiges:(S.prestiges||0)+1,
     achClaimed:S.achClaimed||{}, bestStage:S.bestStage||S.maxStage||1, totalKills:S.totalKills||0 };
-  const startBonus=2*(S.gem.gStart||0);
+  const startBonus=3*(keepGem.gStart||0);
   S=defaultState();
   Object.assign(S,keep);
   S.stage=S.maxStage=S.frontier=1+startBonus;
@@ -709,4 +710,4 @@ $('saveStat').textContent='💾 자동 저장 중 · 최고 스테이지 '+S.max
 setInterval(updateTop,250);
 </script>
 </body>
-</html
+</html 
