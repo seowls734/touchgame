@@ -351,12 +351,12 @@ function heroFx(){
 function prevBossStage(stage){ return Math.floor(stage/10)*10; }
 function mobMaxHp(stage,boss){
   let hp=10*Math.pow(1.55,stage-1);
-  if(boss)hp*=14;
+  if(boss)hp*=10;
   else if(!isBossStage(stage)){
     // 보스를 잡은 뒤 나오는 모든 애드는 직전 보스보다 단단하고, 진행할수록 더 강해진다
     const pb=prevBossStage(stage);
     if(pb>=10){
-      const floor=10*Math.pow(1.55,pb-1)*14*1.25*Math.pow(1.55,stage-pb-1);
+      const floor=10*Math.pow(1.55,pb-1)*10*1.1*Math.pow(1.55,stage-pb-1);
       hp=Math.max(hp,floor);
     }
   }
@@ -379,8 +379,8 @@ function isBossStage(st){return st%10===0;}
 function killsNeeded(st){return isBossStage(st)?1:4;} // 일반 스테이지는 4킬마다 전진
 
 // ── 환생(프레스티지) 보상 ──
-// 환생할 때마다 다음 환생에 필요한 최소 스테이지가 25씩 올라간다.
-function prestigeReqStage(){ return 25*((S.prestiges||0)+1); }
+// 환생할 때마다 다음 환생에 필요한 최소 스테이지가 15씩 올라간다.
+function prestigeReqStage(){ return 25+15*(S.prestiges||0); }
 function gemsFromPrestige(){
   if(S.maxStage<prestigeReqStage())return 0;
   return Math.floor(Math.pow(S.maxStage/10,1.7));
