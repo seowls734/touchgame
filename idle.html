@@ -89,6 +89,15 @@
     padding:8px 14px;border-radius:8px;font-weight:700;cursor:pointer;white-space:nowrap}
   #eventBar .ev-join:active{transform:scale(.95)}
 
+  /* ── 콤보 표시 ── */
+  #combo{position:absolute;top:6px;right:10px;text-align:right;z-index:7;
+    opacity:0;transition:opacity .2s;pointer-events:none}
+  #combo.on{opacity:1}
+  #combo .cv{font-size:22px;font-weight:800;color:var(--gold);text-shadow:0 2px 6px #000;line-height:1}
+  #combo .cb{font-size:11px;color:var(--dps);font-weight:700}
+  #combo.hot .cv{color:var(--dps);animation:comboPunch .12s ease-out}
+  @keyframes comboPunch{0%{transform:scale(1.4)}100%{transform:scale(1)}}
+
   /* ── 행운의 상자 ── */
   .chest{position:absolute;font-size:40px;cursor:pointer;z-index:8;
     filter:drop-shadow(0 4px 8px rgba(0,0,0,.6));animation:chestIn .3s ease-out, chestBob 1s ease-in-out .3s infinite}
@@ -186,6 +195,7 @@
         <button id="lockBtn">🔓 자동진행</button>
       </div>
       <div id="stage">
+        <div id="combo"></div>
         <div id="bossTimer"></div>
         <div id="mob">👾</div>
         <div id="mobName">슬라임</div>
@@ -262,6 +272,16 @@ const HEROES=[
   {id:'eon',    nm:'영겁의 존재',ico:'♾️', dps:9.6e20, cost:2.9e31},
   {id:'ufo',    nm:'이계 방문자',ico:'🛸', dps:5.7e21, cost:4.1e32},
   {id:'genesis',nm:'창세신',     ico:'🔱', dps:3.4e22, cost:5.7e33},
+  {id:'weaver',  nm:'운명의 직조사',ico:'🧵', dps:2.0e23, cost:8e34},
+  {id:'star',    nm:'별의 창조자',  ico:'⭐', dps:1.2e24, cost:1.1e36},
+  {id:'dawn',    nm:'새벽의 군주',  ico:'🌟', dps:7.0e24, cost:1.6e37},
+  {id:'rainbow', nm:'무지개 정령',  ico:'🌈', dps:4.1e25, cost:2.2e38},
+  {id:'thunder', nm:'뇌신',         ico:'⚡', dps:2.4e26, cost:3.1e39},
+  {id:'frost',   nm:'빙결의 군주',  ico:'❄️', dps:1.4e27, cost:4.3e40},
+  {id:'butterfly',nm:'윤회의 나비', ico:'🦋', dps:8.3e27, cost:6e41},
+  {id:'radiance',nm:'광휘의 신',    ico:'🔆', dps:4.9e28, cost:8.4e42},
+  {id:'oracle',  nm:'전지의 현자',  ico:'🪬', dps:2.9e29, cost:1.2e44},
+  {id:'omega',   nm:'종말의 여명',  ico:'🌅', dps:1.7e30, cost:1.6e45},
 ];
 // ── 강화(골드) ──
 const UPGRADES=[
@@ -380,6 +400,16 @@ const HERO_PERKS={
   eon:     {nm:'무한 연산',  type:'dps',      per:0.50, every:40, fmt:v=>'모든 DPS +'+Math.round(v*100)+'%'},
   ufo:     {nm:'미지의 보물',type:'gold',     per:0.30, every:25, fmt:v=>'골드 획득 +'+Math.round(v*100)+'%'},
   genesis: {nm:'창세의 권능',type:'allDmg',   per:0.30, every:25, fmt:v=>'모든 피해 +'+Math.round(v*100)+'%'},
+  weaver:  {nm:'운명 조작',  type:'crit',     per:0.05, every:20, fmt:v=>'클릭 치명타 확률 +'+Math.round(v*100)+'%'},
+  star:    {nm:'별빛 세례',  type:'dps',      per:0.50, every:40, fmt:v=>'모든 DPS +'+Math.round(v*100)+'%'},
+  dawn:    {nm:'여명의 축복',type:'gold',     per:0.30, every:25, fmt:v=>'골드 획득 +'+Math.round(v*100)+'%'},
+  rainbow: {nm:'칠색 광선',  type:'allDmg',   per:0.30, every:25, fmt:v=>'모든 피해 +'+Math.round(v*100)+'%'},
+  thunder: {nm:'천둥의 분노',type:'critDmg',  per:2,    every:25, fmt:v=>'치명타 피해 +'+Math.round(v*100)+'%'},
+  frost:   {nm:'절대 영도',  type:'bossDmg',  per:0.70, every:20, fmt:v=>'보스에게 주는 피해 +'+Math.round(v*100)+'%'},
+  butterfly:{nm:'나비 효과', type:'gemFind',  per:0.05, every:10, fmt:v=>'보스 처치 시 정수 확률 +'+Math.round(v*100)+'%'},
+  radiance:{nm:'광휘 폭발',  type:'dps',      per:0.50, every:40, fmt:v=>'모든 DPS +'+Math.round(v*100)+'%'},
+  oracle:  {nm:'전지의 통찰',type:'allDmg',   per:0.35, every:25, fmt:v=>'모든 피해 +'+Math.round(v*100)+'%'},
+  omega:   {nm:'종말의 빛',  type:'allDmg',   per:0.40, every:25, fmt:v=>'모든 피해 +'+Math.round(v*100)+'%'},
 };
 function perkSteps(have,every){ return have>0?1+Math.floor((have-1)/every):0; }
 
@@ -399,7 +429,8 @@ const ACHIEVEMENTS=[
   {id:'h5',  nm:'동료 모집',     desc:'서로 다른 동료 5종 보유',  gem:4,  chk:s=>heroTypes(s)>=5},
   {id:'h10', nm:'드림팀',        desc:'서로 다른 동료 10종 보유', gem:18, chk:s=>heroTypes(s)>=10},
   {id:'h20', nm:'올스타 군단',   desc:'서로 다른 동료 20종 보유', gem:60, chk:s=>heroTypes(s)>=20},
-  {id:'h30', nm:'우주적 군세',   desc:'모든 동료 30종 보유',      gem:150,chk:s=>heroTypes(s)>=30},
+  {id:'h30', nm:'우주적 군세',   desc:'서로 다른 동료 30종 보유', gem:150,chk:s=>heroTypes(s)>=30},
+  {id:'h40', nm:'창세의 군단',   desc:'모든 동료 40종 보유',      gem:400,chk:s=>heroTypes(s)>=40},
   {id:'p1',  nm:'환생자',        desc:'환생 1회 달성',  gem:2,  chk:s=>(s.prestiges||0)>=1},
   {id:'p5',  nm:'윤회의 길',     desc:'환생 5회 달성',  gem:12, chk:s=>(s.prestiges||0)>=5},
   {id:'p15', nm:'영원의 순례자', desc:'환생 15회 달성', gem:40, chk:s=>(s.prestiges||0)>=15},
@@ -437,7 +468,7 @@ function defaultState(){
     relics:{},
     autoProgress:true, killsThisStage:0, lastSeen:Date.now(),
     totalKills:0, prestiges:0, bestStage:1,
-    achClaimed:{}, bossCleared:{}, exped:{}, expedDone:0,
+    achClaimed:{}, bossCleared:{}, exped:{}, expedDone:0, lastDaily:0,
   };
 }
 
@@ -569,7 +600,7 @@ function killsNeeded(st){return isBossStage(st)?1:4;} // 일반 스테이지는 
 
 // ── 환생(프레스티지) 보상 ──
 // 환생할 때마다 다음 환생에 필요한 최소 스테이지가 10씩 올라간다.
-function prestigeReqStage(){ return 20+10*(S.prestiges||0); }
+function prestigeReqStage(){ return 12+4*(S.prestiges||0); }
 function gemsFromPrestige(){
   if(S.maxStage<prestigeReqStage())return 0;
   return Math.floor(Math.pow(S.maxStage/10,1.7));
@@ -694,8 +725,21 @@ function floatNum(v,crit,color){
 
 // ── 클릭 / 스페이스바 공격 ──
 const CRIT_CHANCE=0.15, CRIT_MULT=5;   // 15% 확률로 5배 치명타
+// ── 클릭 콤보: 연속으로 빠르게 클릭하면 콤보가 쌓여 클릭 피해 증가 ──
+const COMBO_WINDOW=2.5, COMBO_PER=0.03, COMBO_CAP=50;  // 최대 +150% 클릭 피해
+let combo=0, comboTimer=0;
+function comboMult(){ return 1+Math.min(combo,COMBO_CAP)*COMBO_PER; }
+function renderCombo(){
+  const el=$('combo'); if(!el)return;
+  if(combo<2){ el.classList.remove('on','hot'); el.innerHTML=''; return; }
+  const bonus=Math.round((comboMult()-1)*100);
+  el.classList.add('on');
+  el.innerHTML=`<div class="cv">🔥 ${combo} COMBO</div><div class="cb">클릭 피해 +${bonus}%</div>`;
+  el.classList.add('hot'); setTimeout(()=>el.classList.remove('hot'),120);
+}
 function clickAttack(){
-  let dmg=clickPower(), crit=false;
+  combo++; comboTimer=COMBO_WINDOW; renderCombo();
+  let dmg=clickPower()*comboMult(), crit=false;
   if(Math.random()<critChance()){ dmg*=critMult(); crit=true; }
   dealDamage(dmg,true,crit);
   const m=$('mob');m.classList.add('hit');setTimeout(()=>m.classList.remove('hit'),60);
@@ -874,6 +918,8 @@ function tick(){
     if(st.buff>0)st.buff=Math.max(0,st.buff-dt);
   }
   updateSkills();
+  // 콤보 시간 경과 시 초기화
+  if(comboTimer>0){ comboTimer-=dt; if(comboTimer<=0){ combo=0; renderCombo(); } }
   if(mob.boss&&mob.hp>0){
     mob.timer-=dt;
     if(mob.timer<=0){ floatNum('보스 도주!',false,'#ff5a78'); S.killsThisStage=0; spawnMob(); }
@@ -1149,7 +1195,9 @@ function doPrestige(g){
   // 영구 보존: 정수/정수강화(깊은 복사)/환생횟수/도전과제/최고기록/누적처치
   const keepGem=Object.assign({gALL:0,gGold:0,gStart:0},S.gem||{});
   const keep={ gems:(S.gems||0)+g, gem:keepGem, prestiges:(S.prestiges||0)+1,
-    achClaimed:S.achClaimed||{}, bestStage:S.bestStage||S.maxStage||1, totalKills:S.totalKills||0 };
+    achClaimed:S.achClaimed||{}, bestStage:S.bestStage||S.maxStage||1, totalKills:S.totalKills||0,
+    relics:S.relics||{},                       // 유물은 영구 보존(환생해도 유지)
+    exped:S.exped||{}, expedDone:S.expedDone||0, lastDaily:S.lastDaily||0 };
   const startBonus=3*(keepGem.gStart||0);
   S=defaultState();
   Object.assign(S,keep);
@@ -1186,6 +1234,7 @@ function load(){
       S.achClaimed=d.achClaimed||{};
       S.bossCleared=d.bossCleared||{};
       S.exped=d.exped||{}; S.expedDone=d.expedDone||0;
+      S.lastDaily=d.lastDaily||0;
       S.prestiges=d.prestiges||0;
       S.bestStage=Math.max(d.bestStage||1,d.maxStage||1,d.stage||1);
     }catch(e){ S=defaultState(); }
@@ -1194,18 +1243,31 @@ function load(){
   S.bestStage=Math.max(S.bestStage||1,S.maxStage||1);
 }
 
-// ── 오프라인 보상 ──
-function offlineReward(){
+// ── 오프라인 보상 + 일일 출석 보상 ──
+function dayKey(){ const n=new Date(); return n.getFullYear()+'-'+(n.getMonth()+1)+'-'+n.getDate(); }
+function welcomeBack(){
+  const lines=[];
+  // 1) 오프라인 골드(최대 8시간)
   const dt=Math.min((Date.now()-(S.lastSeen||Date.now()))/1000, OFFLINE_CAP_H*3600);
-  if(dt<60)return; // 1분 미만은 무시
-  const d=totalDps(); if(d<=0)return;
-  const gph=goldReward(S.stage,false)/mobMaxHp(S.stage,false);
-  const earn=Math.floor(d*dt*gph*offlineEff()); // 효율(기본 60% + 강화/정수/유물)
-  if(earn<=0)return;
-  S.gold+=earn;
-  openModal('🌙 다시 오셨군요!',
-    `자리를 비운 ${fmtTime(dt)} 동안<br>동료들이 골드 <span class="big">💰 ${fmt(earn)}</span> 를 벌었어요!`,
-    [{t:'받기',cls:'ready',fn:closeModal}]);
+  const d=totalDps();
+  if(dt>=60 && d>0){
+    const gph=goldReward(S.stage,false)/mobMaxHp(S.stage,false);
+    const earn=Math.floor(d*dt*gph*offlineEff()); // 효율(기본 60% + 강화/정수/유물)
+    if(earn>0){ S.gold+=earn;
+      lines.push(`자리를 비운 ${fmtTime(dt)} 동안<br>동료들이 골드 <span class="big">💰 ${fmt(earn)}</span> 를 벌었어요!`); }
+  }
+  // 2) 일일 출석 보상(하루 한 번)
+  const today=dayKey();
+  if(S.lastDaily!==today){
+    S.lastDaily=today;
+    const gems=3+Math.floor((S.bestStage||1)/20);
+    S.gems+=gems;
+    lines.push(`📅 오늘의 <b>출석 보상</b>: 정수 <span class="big">💎 ${gems}</span> 획득!`);
+  }
+  if(lines.length){
+    openModal('🌙 다시 오셨군요!', lines.join('<br><br>'), [{t:'받기',cls:'ready',fn:closeModal}]);
+    updateTop(); save();
+  }
 }
 
 // ── 초기화 ──
@@ -1213,7 +1275,7 @@ load();
 spawnMob();
 renderSkills();
 updateTop(); updateStageLabel(); renderShop();
-offlineReward();
+welcomeBack();
 $('saveStat').textContent='💾 자동 저장 중 · 최고 스테이지 '+S.maxStage;
 setInterval(updateTop,250);
 </script>
