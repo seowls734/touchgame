@@ -298,6 +298,16 @@ const HEROES=[
   {id:'mother',  nm:'만물의 어머니',ico:'🪺', dps:2.6e36, cost:2.3e54},
   {id:'silence', nm:'침묵의 심연',  ico:'🌫️', dps:1.5e37, cost:3.2e55},
   {id:'absolute',nm:'절대자',       ico:'✴️', dps:9.0e37, cost:4.5e56},
+  {id:'transcend',nm:'초월자',      ico:'🧿', dps:5.4e38, cost:6.3e57},
+  {id:'voidking', nm:'공허의 왕',   ico:'⚫', dps:3.2e39, cost:8.8e58},
+  {id:'infinity', nm:'무한의 화신', ico:'🌐', dps:1.9e40, cost:1.2e60},
+  {id:'dream',    nm:'꿈의 군주',   ico:'💤', dps:1.1e41, cost:1.7e61},
+  {id:'fate2',    nm:'운명의 패자', ico:'🎴', dps:6.8e41, cost:2.4e62},
+  {id:'singular', nm:'특이점',      ico:'⬛', dps:4.1e42, cost:3.4e63},
+  {id:'allfather',nm:'만신의 왕',   ico:'🧙', dps:2.4e43, cost:4.7e64},
+  {id:'beyond',   nm:'피안의 존재', ico:'🕊️', dps:1.5e44, cost:6.6e65},
+  {id:'truth',    nm:'진리의 서',   ico:'📖', dps:8.8e44, cost:9.2e66},
+  {id:'oneness',  nm:'근원의 하나', ico:'⭕', dps:5.3e45, cost:1.3e68},
 ];
 // ── 강화(골드) ──
 const UPGRADES=[
@@ -436,6 +446,16 @@ const HERO_PERKS={
   mother:  {nm:'풍요의 모태',type:'gemFind',  per:0.05, every:10, fmt:v=>'보스 처치 시 정수 확률 +'+Math.round(v*100)+'%'},
   silence: {nm:'침묵의 잠식',type:'dps',      per:0.50, every:40, fmt:v=>'모든 DPS +'+Math.round(v*100)+'%'},
   absolute:{nm:'절대 권능',  type:'allDmg',   per:0.45, every:25, fmt:v=>'모든 피해 +'+Math.round(v*100)+'%'},
+  transcend:{nm:'초월 가속', type:'dps',      per:0.50, every:40, fmt:v=>'모든 DPS +'+Math.round(v*100)+'%'},
+  voidking:{nm:'공허 강타',  type:'bossDmg',  per:0.70, every:20, fmt:v=>'보스에게 주는 피해 +'+Math.round(v*100)+'%'},
+  infinity:{nm:'무한 확장',  type:'allDmg',   per:0.40, every:25, fmt:v=>'모든 피해 +'+Math.round(v*100)+'%'},
+  dream:   {nm:'몽환의 보물',type:'gold',     per:0.30, every:25, fmt:v=>'골드 획득 +'+Math.round(v*100)+'%'},
+  fate2:   {nm:'운명 비틀기',type:'crit',     per:0.05, every:20, fmt:v=>'클릭 치명타 확률 +'+Math.round(v*100)+'%'},
+  singular:{nm:'중력 붕괴',  type:'critDmg',  per:2,    every:25, fmt:v=>'치명타 피해 +'+Math.round(v*100)+'%'},
+  allfather:{nm:'만신의 가호',type:'allDmg',  per:0.45, every:25, fmt:v=>'모든 피해 +'+Math.round(v*100)+'%'},
+  beyond:  {nm:'피안의 인도',type:'gemFind',  per:0.05, every:10, fmt:v=>'보스 처치 시 정수 확률 +'+Math.round(v*100)+'%'},
+  truth:   {nm:'진리 해석',  type:'dps',      per:0.50, every:40, fmt:v=>'모든 DPS +'+Math.round(v*100)+'%'},
+  oneness: {nm:'합일의 권능',type:'allDmg',   per:0.50, every:25, fmt:v=>'모든 피해 +'+Math.round(v*100)+'%'},
 };
 function perkSteps(have,every){ return have>0?1+Math.floor((have-1)/every):0; }
 
@@ -457,7 +477,8 @@ const ACHIEVEMENTS=[
   {id:'h20', nm:'올스타 군단',   desc:'서로 다른 동료 20종 보유', gem:60, chk:s=>heroTypes(s)>=20},
   {id:'h30', nm:'우주적 군세',   desc:'서로 다른 동료 30종 보유', gem:150,chk:s=>heroTypes(s)>=30},
   {id:'h40', nm:'창세의 군단',   desc:'서로 다른 동료 40종 보유', gem:400,chk:s=>heroTypes(s)>=40},
-  {id:'h50', nm:'절대의 군세',   desc:'모든 동료 50종 보유',      gem:1000,chk:s=>heroTypes(s)>=50},
+  {id:'h50', nm:'절대의 군세',   desc:'서로 다른 동료 50종 보유', gem:1000,chk:s=>heroTypes(s)>=50},
+  {id:'h60', nm:'근원의 군세',   desc:'모든 동료 60종 보유',      gem:2500,chk:s=>heroTypes(s)>=60},
   {id:'p1',  nm:'환생자',        desc:'환생 1회 달성',  gem:2,  chk:s=>(s.prestiges||0)>=1},
   {id:'p5',  nm:'윤회의 길',     desc:'환생 5회 달성',  gem:12, chk:s=>(s.prestiges||0)>=5},
   {id:'p15', nm:'영원의 순례자', desc:'환생 15회 달성', gem:40, chk:s=>(s.prestiges||0)>=15},
