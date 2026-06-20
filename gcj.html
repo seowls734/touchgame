@@ -121,9 +121,10 @@
   .skillBtn:active{transform:scale(.95)}
 
   /* ── 상점 ── */
-  #shopTabs{display:flex;border-bottom:1px solid var(--line)}
-  .tab{flex:1;padding:11px;text-align:center;font-size:13px;font-weight:700;color:var(--dim);
-    cursor:pointer;border-bottom:2px solid transparent}
+  #shopTabs{display:flex;border-bottom:1px solid var(--line);overflow-x:auto;scrollbar-width:none}
+  #shopTabs::-webkit-scrollbar{display:none}
+  .tab{flex:0 0 auto;padding:11px 13px;text-align:center;font-size:13px;font-weight:700;color:var(--dim);
+    cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap}
   .tab.active{color:var(--txt);border-bottom-color:var(--gold)}
   #shopList{flex:1;overflow-y:auto;padding:8px;display:flex;flex-direction:column;gap:8px}
   #shopList::-webkit-scrollbar{width:8px}
@@ -215,8 +216,11 @@
     <div id="shop">
       <div id="shopTabs">
         <div class="tab active" data-tab="hero">🛡️ 동료</div>
-        <div class="tab" data-tab="quest">🗺️ 탐험</div>
+        <div class="tab" data-tab="forge">🔨 대장간</div>
         <div class="tab" data-tab="up">⬆️ 강화</div>
+        <div class="tab" data-tab="research">🔬 연구</div>
+        <div class="tab" data-tab="gacha">🎰 뽑기</div>
+        <div class="tab" data-tab="quest">🗺️ 탐험</div>
         <div class="tab" data-tab="gem">💎 정수</div>
         <div class="tab" data-tab="relic">📜 유물</div>
         <div class="tab" data-tab="ach">🏅 도전</div>
@@ -341,6 +345,31 @@ const RELICS=[
   {id:'gemstone', ico:'💠', nm:'정수의 원석',     type:'gem',     per:0.05, fmt:v=>'정수 드롭 확률 +'+Math.round(v*100)+'%'},
   {id:'hourglass',ico:'⏳', nm:'시간의 모래시계', type:'offline', per:0.10, fmt:v=>'오프라인 효율 +'+Math.round(v*100)+'%'},
 ];
+// ── 대장간: 장비를 제작/강화하면 영구 보너스(환생해도 유지) ──
+const RARITIES=[
+  {nm:'보통', col:'#b7c0d8', mult:1},
+  {nm:'고급', col:'#5ad17a', mult:1.7},
+  {nm:'희귀', col:'#7ee0ff', mult:3},
+  {nm:'영웅', col:'#c9a0ff', mult:5},
+  {nm:'전설', col:'#ffce54', mult:8.5},
+];
+const RARITY_WEIGHT=[50,28,14,6,2];     // 보통~전설 가중치
+const EQUIP_SLOTS=[
+  {id:'weapon', ico:'⚔️', nm:'무기',   stat:'click',  per:0.08, fmt:v=>'클릭 피해 +'+Math.round(v*100)+'%'},
+  {id:'armor',  ico:'🛡️', nm:'갑옷',   stat:'allDmg', per:0.05, fmt:v=>'모든 피해 +'+Math.round(v*100)+'%'},
+  {id:'ring',   ico:'💍', nm:'장신구', stat:'gold',   per:0.10, fmt:v=>'골드 획득 +'+Math.round(v*100)+'%'},
+];
+// ── 연구소: 정수를 투자하고 실제 시간이 지나면 영구 보너스 해금(오프라인 진행) ──
+const RESEARCH=[
+  {id:'r_gold', ico:'📈', nm:'경제학',     cost:4,  dur:1200,  type:'gold',   val:0.5, desc:'골드 획득 +50%'},
+  {id:'r_click',ico:'🔧', nm:'무예 단련',  cost:6,  dur:2400,  type:'click',  val:0.6, desc:'클릭 피해 +60%'},
+  {id:'r_dps',  ico:'⚙️', nm:'전술 교본',  cost:6,  dur:2400,  type:'dps',    val:0.5, desc:'모든 DPS +50%'},
+  {id:'r_crit', ico:'🎯', nm:'급소학',     cost:10, dur:5400,  type:'crit',   val:0.05,desc:'치명타 확률 +5%'},
+  {id:'r_off',  ico:'🛌', nm:'야영 자동화',cost:9,  dur:5400,  type:'offline',val:0.3, desc:'오프라인 효율 +30%'},
+  {id:'r_all',  ico:'🧠', nm:'고대 지식',  cost:16, dur:10800, type:'allDmg', val:0.5, desc:'모든 피해 +50%'},
+  {id:'r_gem',  ico:'💠', nm:'정수 공학',  cost:24, dur:18000, type:'gemFind',val:0.1, desc:'보스 정수 확률 +10%'},
+];
+
 // ── 액티브 스킬: 쿨다운 후 재사용 ──
 const SKILLS=[
   {id:'berserk',ico:'⚡', nm:'광폭화',    dur:10, cd:60, desc:'10초간 모든 피해 ×3'},
@@ -514,6 +543,8 @@ function defaultState(){
     upg:{click:0,dmg:0,gold:0,crit:0,critDmg:0,auto:0,offline:0},
     gem:{gALL:0,gGold:0,gStart:0,gCrit:0,gAuto:0,gOffline:0,gSkill:0},
     relics:{},
+    equip:{},                                  // 대장간 장비: {slotId:{lv,rar}}
+    research:{active:null,done:{}},            // 연구소: active={id,end}, done={id:true}
     autoProgress:true, killsThisStage:0, lastSeen:Date.now(),
     totalKills:0, prestiges:0, bestStage:1,
     achClaimed:{}, bossCleared:{}, exped:{}, expedDone:0, lastDaily:0,
@@ -553,6 +584,39 @@ function relicFx(){
   }
   return r;
 }
+// ── 대장간 장비 효과 ──
+function equipFx(){
+  const fx={click:1,allDmg:1,gold:1};
+  if(S.equip)for(const sl of EQUIP_SLOTS){
+    const e=S.equip[sl.id]; if(!e||!e.lv||e.lv<=0)continue;
+    const v=sl.per*e.lv*RARITIES[e.rar||0].mult;
+    if(sl.stat==='click')fx.click*=1+v;
+    else if(sl.stat==='allDmg')fx.allDmg*=1+v;
+    else if(sl.stat==='gold')fx.gold*=1+v;
+  }
+  return fx;
+}
+function equipStatVal(sl){ const e=S.equip&&S.equip[sl.id]; if(!e||!e.lv)return 0; return sl.per*e.lv*RARITIES[e.rar||0].mult; }
+// ── 연구소 효과(완료된 연구의 영구 보너스 합산) ──
+function researchFx(){
+  const fx={gold:1,dps:1,click:1,allDmg:1,crit:0,offline:0,gem:0};
+  const done=S.research&&S.research.done; if(!done)return fx;
+  for(const r of RESEARCH){ if(!done[r.id])continue;
+    switch(r.type){
+      case 'gold':   fx.gold*=1+r.val; break;
+      case 'dps':    fx.dps*=1+r.val;  break;
+      case 'click':  fx.click*=1+r.val;break;
+      case 'allDmg': fx.click*=1+r.val; fx.dps*=1+r.val; break;
+      case 'crit':   fx.crit+=r.val;   break;
+      case 'offline':fx.offline+=r.val;break;
+      case 'gemFind':fx.gem+=r.val;    break;
+    }
+  }
+  return fx;
+}
+// 순수 스테이지 골드 기준값(각종 배수 제외) — 대장간/뽑기 비용 산정용
+function pureGold(st){ return 6*Math.pow(1.24,Math.max(0,st-1)); }
+
 // 액티브 스킬 버프 배율
 function skillDmgMult(){ return (skillState.berserk&&skillState.berserk.buff>0)?3:1; }
 function skillGoldMult(){ return (skillState.gold&&skillState.gold.buff>0)?3:1; }
@@ -566,7 +630,9 @@ function eventAutoAdd(){ return evBuff('auto')||0; }
 
 // ── 파생 수치 ──
 function clickPower(){
-  return Math.ceil(1*Math.pow(1.6,S.upg.click))*gemAllMult()*heroFx().click*relicFx().click*skillDmgMult()*eventDmgMult();
+  const eq=equipFx(), rs=researchFx();
+  return Math.ceil(1*Math.pow(1.6,S.upg.click))*gemAllMult()*heroFx().click*relicFx().click
+    *eq.click*eq.allDmg*rs.click*rs.allDmg*skillDmgMult()*eventDmgMult();
 }
 function totalDps(){
   let d=0;
@@ -575,22 +641,24 @@ function totalDps(){
   d*=gemAllMult();
   d*=heroFx().dps;               // 동료 특수 능력
   d*=relicFx().dps;              // 유물
+  d*=equipFx().allDmg;           // 대장간 장비(갑옷)
+  { const rs=researchFx(); d*=rs.dps*rs.allDmg; } // 연구소
   d*=skillDmgMult();             // 광폭화
   d*=eventDmgMult();             // 이벤트 버프
   return d;
 }
-function goldMult(){ return Math.pow(1.20,S.upg.gold)*Math.pow(1.30,S.gem.gGold||0)*relicFx().gold*skillGoldMult()*eventGoldMult(); }
+function goldMult(){ return Math.pow(1.20,S.upg.gold)*Math.pow(1.30,S.gem.gGold||0)*relicFx().gold*equipFx().gold*researchFx().gold*skillGoldMult()*eventGoldMult(); }
 // 자동 공격 횟수/초 (자동 검술 + 영혼 분신 + 이벤트 분신)
 function autoRate(){ return (S.upg.auto||0)+(S.gem.gAuto||0)+eventAutoAdd(); }
 // 치명타 확률/배율 (강화·정수·유물·동료 합산)
-function critChance(){ return Math.min(0.95, CRIT_CHANCE+heroFx().crit+relicFx().crit+0.02*(S.upg.crit||0)+0.03*(S.gem.gCrit||0)+eventCritAdd()); }
+function critChance(){ return Math.min(0.95, CRIT_CHANCE+heroFx().crit+relicFx().crit+researchFx().crit+0.02*(S.upg.crit||0)+0.03*(S.gem.gCrit||0)+eventCritAdd()); }
 function critMult(){ return CRIT_MULT+heroFx().critDmg+0.30*(S.upg.critDmg||0); }
 // 보스 제한시간 보너스 (동료+유물)
 function bossTimeBonus(){ return heroFx().bossTime+relicFx().bossTime; }
 // 오프라인 효율 (기본 0.6 + 강화/정수/유물)
-function offlineEff(){ return Math.min(2.0, 0.6+0.10*(S.upg.offline||0)+0.15*(S.gem.gOffline||0)+relicFx().offline); }
+function offlineEff(){ return Math.min(2.0, 0.6+0.10*(S.upg.offline||0)+0.15*(S.gem.gOffline||0)+relicFx().offline+researchFx().offline); }
 // 정수 드롭 추가 확률 (동료+유물)
-function gemFindChance(){ return Math.min(0.95, heroFx().gem+relicFx().gem+eventGemAdd()); }
+function gemFindChance(){ return Math.min(0.95, heroFx().gem+relicFx().gem+researchFx().gem+eventGemAdd()); }
 function gemAllMult(){ return 1+0.25*(S.gem.gALL||0); }
 
 // 동료 특수 능력 합산 → 각종 보정치
@@ -1057,12 +1125,117 @@ function updateQuestBadge(){
   t.innerHTML='🗺️ 탐험'+(n>0?' <span style="color:#7ee0ff">('+n+')</span>':'');
 }
 
+// ── 대장간 ──
+function forgeCraftCost(){ return Math.ceil(pureGold(Math.max(1,S.maxStage))*55+40); }
+function forgeUpCost(sl){
+  const e=(S.equip&&S.equip[sl.id])||{lv:0,rar:0};
+  return Math.ceil(forgeCraftCost()*Math.pow(1.55,e.lv)*(0.5+0.5*RARITIES[e.rar||0].mult));
+}
+const REFORGE_COST=6;  // 재련 1회 정수 비용
+function rollRarity(){
+  let t=0; for(const w of RARITY_WEIGHT)t+=w;
+  let x=Math.random()*t;
+  for(let i=0;i<RARITY_WEIGHT.length;i++){ if(x<RARITY_WEIGHT[i])return i; x-=RARITY_WEIGHT[i]; }
+  return 0;
+}
+function craftEquip(sl){
+  if(!S.equip)S.equip={};
+  const cur=S.equip[sl.id]; if(cur&&cur.lv>0)return;
+  const cost=forgeCraftCost(); if(S.gold<cost)return;
+  S.gold-=cost; const rar=rollRarity();
+  S.equip[sl.id]={lv:1,rar};
+  floatNum('🔨 '+RARITIES[rar].nm+' '+sl.nm+' 제작!',true,RARITIES[rar].col);
+  updateTop();renderShop();flashSave();
+}
+function upgradeEquip(sl){
+  const e=S.equip&&S.equip[sl.id]; if(!e||e.lv<=0)return;
+  const cost=forgeUpCost(sl); if(S.gold<cost)return;
+  S.gold-=cost; e.lv++;
+  updateTop();renderShop();flashSave();
+}
+function reforgeEquip(sl){
+  const e=S.equip&&S.equip[sl.id]; if(!e||e.lv<=0)return;
+  if(S.gems<REFORGE_COST)return;
+  S.gems-=REFORGE_COST; const nr=rollRarity();
+  if(nr>(e.rar||0)){ e.rar=nr; floatNum('✨ '+RARITIES[nr].nm+'(으)로 승급!',true,RARITIES[nr].col); }
+  else floatNum('재련 실패 — 등급 유지',false,'#8b93ad');
+  updateTop();renderShop();flashSave();
+}
+
+// ── 뽑기 / 룰렛 ──
+let lastGacha={gold:'',gem:''};
+function goldRouletteCost(){ return Math.ceil(pureGold(Math.max(1,S.maxStage))*130+100); }
+function spinGoldRoulette(){
+  const cost=goldRouletteCost(); if(S.gold<cost)return;
+  S.gold-=cost; const r=Math.random(); let msg;
+  if(r<0.40){ const g=Math.ceil(cost*0.5); S.gold+=g; msg='💰 +'+fmt(g)+' (꽝)'; }
+  else if(r<0.70){ const g=Math.ceil(cost*2);  S.gold+=g; msg='💰 +'+fmt(g); }
+  else if(r<0.85){ const g=Math.ceil(cost*5);  S.gold+=g; msg='🎉 잭팟! 💰 +'+fmt(g); }
+  else if(r<0.95){ const g=1+Math.floor(Math.random()*2); S.gems+=g; msg='💎 +'+g; }
+  else { skillState.berserk.buff=Math.max(skillState.berserk.buff,12); updateSkills(); msg='⚡ 광폭화 12초!'; }
+  lastGacha.gold=msg; floatNum('🎰 '+msg,true,'#ffce54');
+  updateTop();renderShop();flashSave();
+}
+const GEM_GACHA_COST=3;
+function spinGemGacha(){
+  if(S.gems<GEM_GACHA_COST)return;
+  S.gems-=GEM_GACHA_COST; const r=Math.random(); let msg;
+  if(r<0.30){ const g=Math.ceil(pureGold(Math.max(1,S.maxStage))*goldMult()*800); S.gold+=g; msg='💰 +'+fmt(g); }
+  else if(r<0.55){ S.gems+=2; msg='💎 +2 (환급)'; }
+  else if(r<0.75){
+    const rc=RELICS[Math.floor(Math.random()*RELICS.length)];
+    if(!S.relics)S.relics={}; S.relics[rc.id]=(S.relics[rc.id]||0)+1;
+    msg=rc.ico+' '+rc.nm+' Lv.'+S.relics[rc.id];
+  }
+  else if(r<0.92){
+    const owned=EQUIP_SLOTS.filter(s=>S.equip&&S.equip[s.id]&&S.equip[s.id].lv>0);
+    if(owned.length){ const sl=owned[Math.floor(Math.random()*owned.length)]; S.equip[sl.id].lv+=2; msg='🔨 '+sl.nm+' +2 강화!'; }
+    else { S.gems+=2; msg='💎 +2 (장비 없음 환급)'; }
+  }
+  else { S.gems+=5; msg='🎉 잭팟! 💎 +5'; }
+  lastGacha.gem=msg; floatNum('🎁 '+msg,true,'#7ee0ff');
+  updateTop();renderShop();flashSave();
+}
+
+// ── 연구소 ──
+function researchStatus(id){
+  if(S.research&&S.research.done&&S.research.done[id])return 'done';
+  const a=S.research&&S.research.active;
+  if(a&&a.id===id)return Date.now()>=a.end?'ready':'running';
+  return 'idle';
+}
+function startResearch(r){
+  if(!S.research)S.research={active:null,done:{}};
+  if(S.research.active)return;                  // 한 번에 하나만
+  if(researchStatus(r.id)!=='idle')return;
+  if(S.gems<r.cost)return;
+  S.gems-=r.cost; S.research.active={id:r.id,end:Date.now()+r.dur*1000};
+  floatNum('🔬 '+r.nm+' 연구 시작!',true,'#7ee0ff');
+  updateTop();renderShop();flashSave();
+}
+function claimResearch(r){
+  if(researchStatus(r.id)!=='ready')return;
+  if(!S.research.done)S.research.done={}; S.research.done[r.id]=true;
+  S.research.active=null;
+  floatNum('🔬 '+r.nm+' 완료! '+r.desc,true,'#5ad17a');
+  updateTop();renderShop();flashSave();
+}
+function researchReadyCount(){
+  const a=S.research&&S.research.active;
+  return (a&&Date.now()>=a.end)?1:0;
+}
+function updateResearchBadge(){
+  const t=document.querySelector('.tab[data-tab="research"]'); if(!t)return;
+  const n=researchReadyCount();
+  t.innerHTML='🔬 연구'+(n>0?' <span style="color:#7ee0ff">('+n+')</span>':'');
+}
+
 // ── 상점 렌더 ──
 let activeTab='hero';
 document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{
   activeTab=t.dataset.tab;
   document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('active',x===t));
-  $('buyMaxBtn').style.display=(activeTab==='gem'||activeTab==='ach'||activeTab==='relic'||activeTab==='quest')?'none':'';
+  $('buyMaxBtn').style.display=(activeTab==='hero'||activeTab==='up')?'':'none';
   renderShop();
 });
 function renderShop(){
@@ -1126,6 +1299,97 @@ function renderShop(){
       `· 파견하면 <b>실제 시간</b>이 지난 뒤 보상을 받습니다 (게임을 꺼도 진행돼요)<br>`+
       `· 보상은 현재 <b>최고 스테이지(${S.maxStage})</b> 기준으로 커집니다<br>`+
       `· 더 깊은 스테이지에 도달하면 새 원정이 해금됩니다`;
+    list.appendChild(info);
+  }else if(activeTab==='forge'){
+    EQUIP_SLOTS.forEach(sl=>{
+      const e=(S.equip&&S.equip[sl.id])||{lv:0,rar:0};
+      if(e.lv>0){
+        const rar=RARITIES[e.rar||0];
+        const upCost=forgeUpCost(sl), okU=S.gold>=upCost;
+        const cur=equipStatVal(sl), per=sl.per*rar.mult;
+        list.appendChild(card({
+          ico:sl.ico,
+          nm:`<span style="color:${rar.col}">[${rar.nm}] ${sl.nm}</span> Lv.${e.lv}`,
+          sub:'현재 '+sl.fmt(cur),
+          lvl:`강화 시 +${Math.round(per*100)}%p (다음 ${sl.fmt(cur+per)})`,
+          cost:'💰 '+fmt(upCost), costCls:okU?'ok':'no',
+          onclick:()=>upgradeEquip(sl)
+        }));
+        const okR=S.gems>=REFORGE_COST;
+        list.appendChild(card({
+          ico:'♻️', nm:sl.nm+' 재련',
+          sub:'더 높은 등급이 나오면 승급 (실패해도 등급 유지)',
+          lvl:`등급 가중치 보통50·고급28·희귀14·영웅6·전설2%`,
+          cost:'💎 '+REFORGE_COST, costCls:'gem '+(okR?'ok':'no'),
+          onclick:()=>reforgeEquip(sl)
+        }));
+      }else{
+        const cCost=forgeCraftCost(), okC=S.gold>=cCost;
+        list.appendChild(card({
+          ico:'❔', nm:sl.nm+' · 빈 슬롯',
+          sub:'제작하면 무작위 등급으로 획득 ('+sl.fmt(sl.per)+' / Lv)',
+          lvl:'기본 효과: '+sl.fmt(sl.per)+' · 등급이 높을수록 강력',
+          cost:'🔨 '+fmt(cCost), costCls:okC?'ok':'no',
+          onclick:()=>craftEquip(sl)
+        }));
+      }
+    });
+    const info=document.createElement('div');
+    info.style.cssText='font-size:11px;color:var(--dim);text-align:center;padding:8px;line-height:1.7';
+    info.innerHTML=`🔨 <b>대장간</b><br>`+
+      `· 무기·갑옷·장신구를 <b>제작</b>하고 골드로 <b>강화</b>합니다<br>`+
+      `· <b>재련</b>으로 등급을 올리면 레벨당 효과가 커집니다<br>`+
+      `· 장비 효과는 항상 적용되며 <b style="color:var(--gold)">환생해도 사라지지 않아요</b>`;
+    list.appendChild(info);
+  }else if(activeTab==='gacha'){
+    const gc=goldRouletteCost(), okG=S.gold>=gc;
+    list.appendChild(card({
+      ico:'🎰', nm:'행운의 룰렛',
+      sub:'골드를 걸고 한 방! 잭팟·정수·버프 가능',
+      lvl:(lastGacha.gold?('🕘 최근: '+lastGacha.gold):'40% 꽝 · 30% 2배 · 15% 5배 · 10% 💎 · 5% ⚡'),
+      cost:'💰 '+fmt(gc), costCls:okG?'ok':'no', onclick:spinGoldRoulette
+    }));
+    const okX=S.gems>=GEM_GACHA_COST;
+    list.appendChild(card({
+      ico:'🎁', nm:'운명의 뽑기',
+      sub:'정수로 뽑기! 유물·장비 강화·대량 골드·정수',
+      lvl:(lastGacha.gem?('🕘 최근: '+lastGacha.gem):'유물 / 장비 +2 / 대량 골드 / 정수 잭팟'),
+      cost:'💎 '+GEM_GACHA_COST, costCls:'gem '+(okX?'ok':'no'), onclick:spinGemGacha
+    }));
+    const info=document.createElement('div');
+    info.style.cssText='font-size:11px;color:var(--dim);text-align:center;padding:8px;line-height:1.7';
+    info.innerHTML=`🎰 <b>뽑기</b><br>`+
+      `· <b>룰렛</b>은 골드를, <b>뽑기</b>는 정수를 사용합니다<br>`+
+      `· 비용은 현재 최고 스테이지(${S.maxStage})에 맞춰 커집니다<br>`+
+      `· 운이 좋으면 잭팟·유물·장비 강화가 한 번에!`;
+    list.appendChild(info);
+  }else if(activeTab==='research'){
+    const active=S.research&&S.research.active;
+    RESEARCH.forEach(r=>{
+      const st=researchStatus(r.id);
+      let lvl,cost,costCls,onclick,locked=false;
+      if(st==='done'){
+        lvl='✅ 연구 완료 · '+r.desc+' (영구)'; cost='완료'; costCls=''; locked=true; onclick=()=>{};
+      }else if(st==='running'){
+        const left=Math.max(0,(active.end-Date.now())/1000);
+        lvl='⏳ 연구 중 · 남은 시간 '+fmtTime(left); cost='⏳'; costCls=''; onclick=()=>{};
+      }else if(st==='ready'){
+        lvl='🎁 완료! 눌러서 수령'; cost='🎁 수령'; costCls='gem ok'; onclick=()=>claimResearch(r);
+      }else{
+        const busy=!!active; locked=busy;
+        lvl=busy?'🔒 다른 연구 진행 중':('소요 '+fmtTime(r.dur)+' · '+r.desc+' (영구)');
+        const ok=!busy&&S.gems>=r.cost; cost='💎 '+r.cost; costCls='gem '+(ok?'ok':'no');
+        onclick=()=>startResearch(r);
+      }
+      list.appendChild(card({ ico:r.ico, nm:r.nm, sub:r.desc, lvl, cost, costCls, locked, onclick }));
+    });
+    let doneN=0; if(S.research&&S.research.done)for(const k in S.research.done)if(S.research.done[k])doneN++;
+    const info=document.createElement('div');
+    info.style.cssText='font-size:11px;color:var(--dim);text-align:center;padding:8px;line-height:1.7';
+    info.innerHTML=`🔬 <b>연구소</b> (완료 ${doneN}/${RESEARCH.length})<br>`+
+      `· 정수를 투자하면 <b>실제 시간</b>이 지난 뒤 영구 보너스가 해금돼요<br>`+
+      `· 한 번에 하나만 연구할 수 있고, <b>게임을 꺼도 진행</b>됩니다<br>`+
+      `· 완료된 연구는 <b style="color:var(--gold)">환생해도 유지</b>됩니다`;
     list.appendChild(info);
   }else if(activeTab==='up'){
     UPGRADES.forEach(u=>{
@@ -1214,8 +1478,11 @@ function updateTop(){
   $('prestigeBtn').classList.toggle('ready',gemsFromPrestige()>0);
   updateAchBadge();
   updateQuestBadge();
+  updateResearchBadge();
   // 진행 중인 탐험이 있으면 탐험 탭의 타이머/완료 상태를 실시간 갱신
   if(activeTab==='quest'&&expRunningCount()>0)renderShop();
+  // 진행 중인 연구가 있으면 연구 탭의 타이머를 실시간 갱신
+  if(activeTab==='research'&&S.research&&S.research.active&&Date.now()<S.research.active.end)renderShop();
 }
 function updateStageLabel(){
   $('stageLabel').textContent='스테이지 '+S.stage+(isBossStage(S.stage)?' 👑':'');
@@ -1247,6 +1514,8 @@ function doPrestige(g){
   const keep={ gems:(S.gems||0)+g, gem:keepGem, prestiges:(S.prestiges||0)+1,
     achClaimed:S.achClaimed||{}, bestStage:S.bestStage||S.maxStage||1, totalKills:S.totalKills||0,
     relics:S.relics||{},                       // 유물은 영구 보존(환생해도 유지)
+    equip:S.equip||{},                          // 대장간 장비도 영구 보존
+    research:S.research||{active:null,done:{}}, // 연구 결과(영구) 보존
     exped:S.exped||{}, expedDone:S.expedDone||0, lastDaily:S.lastDaily||0 };
   const startBonus=3*(keepGem.gStart||0);
   S=defaultState();
@@ -1280,6 +1549,10 @@ function load(){
       S.upg=Object.assign({click:0,dmg:0,gold:0,crit:0,critDmg:0,auto:0,offline:0},d.upg||{});
       S.gem=Object.assign({gALL:0,gGold:0,gStart:0,gCrit:0,gAuto:0,gOffline:0,gSkill:0},d.gem||{});
       S.relics=d.relics||{};
+      S.equip=d.equip||{};
+      S.research=(d.research&&typeof d.research==='object')
+        ? {active:d.research.active||null, done:d.research.done||{}}
+        : {active:null,done:{}};
       S.heroes=d.heroes||{};
       S.achClaimed=d.achClaimed||{};
       S.bossCleared=d.bossCleared||{};
@@ -1330,4 +1603,4 @@ $('saveStat').textContent='💾 자동 저장 중 · 최고 스테이지 '+S.max
 setInterval(updateTop,250);
 </script>
 </body>
-</html 
+</html   
