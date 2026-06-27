@@ -1198,6 +1198,20 @@ function claimExped(def){
 }
 function expRunningCount(){ let n=0; for(const d of EXPEDITIONS) if(expStatus(d)!=='idle')n++; return n; }
 function expDoneCount(){ let n=0; for(const d of EXPEDITIONS) if(expStatus(d)==='done')n++; return n; }
+// 진행 중 탐험의 남은 시간 텍스트만 제자리 갱신(카드 전체 재생성 방지 → 파견/수령 버튼 클릭이 씹히지 않음).
+// 진행→완료로 바뀌는 순간에만 한 번 renderShop()으로 다시 그려 수령 버튼을 띄운다.
+function updateQuestTimers(){
+  if(activeTab!=='quest')return;
+  const timers=document.querySelectorAll('#shopList .exp-timer');
+  if(!timers.length)return;
+  let transition=false;
+  timers.forEach(el=>{
+    const def=EXPEDITIONS.find(d=>d.id===el.dataset.exp);
+    if(!def||expStatus(def)!=='running'){ transition=true; return; }
+    el.textContent=fmtTime(Math.max(0,(S.exped[def.id]-Date.now())/1000));
+  });
+  if(transition)renderShop();
+}
 function updateQuestBadge(){
   const t=document.querySelector('.tab[data-tab="quest"]'); if(!t)return;
   const n=expDoneCount();
@@ -1396,7 +1410,7 @@ function renderShop(){
         cost='🔒'; costCls=''; onclick=()=>{};
       }else if(status==='running'){
         const left=Math.max(0,(S.exped[def.id]-Date.now())/1000);
-        lvl='⏳ 진행 중 · 남은 시간 '+fmtTime(left);
+        lvl='⏳ 진행 중 · 남은 시간 <span class="exp-timer" data-exp="'+def.id+'">'+fmtTime(left)+'</span>';
         cost='⏳'; costCls=''; onclick=()=>{};
       }else if(status==='done'){
         lvl='🎁 완료! 눌러서 보상 수령';
@@ -1598,7 +1612,7 @@ function updateTop(){
   updateQuestBadge();
   updateResearchBadge();
   // 진행 중인 탐험이 있으면 탐험 탭의 타이머/완료 상태를 실시간 갱신
-  if(activeTab==='quest'&&expRunningCount()>0)renderShop();
+  if(activeTab==='quest')updateQuestTimers();
   // 진행 중인 연구가 있으면 연구 탭의 타이머를 실시간 갱신
   if(activeTab==='research'&&S.research&&S.research.active&&Date.now()<S.research.active.end)renderShop();
 }
