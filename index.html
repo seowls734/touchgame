@@ -1219,12 +1219,12 @@ function updateQuestBadge(){
 }
 
 // ── 대장간 ──
-const FORGE_GROWTH=1.08;   // 강화할 때마다 가격이 8%씩만 완만하게 증가(복리 부담 완화)
+const FORGE_GROWTH=1.05;   // 강화할 때마다 가격이 5%씩만 아주 완만하게 증가
 function forgeCraftCost(){ return Math.ceil(pureGold(Math.max(1,S.maxStage))*55+40); }
 // 현재 레벨에서의 1회 강화 비용 기준값(등급이 높을수록 살짝 비쌈)
 function forgeUpBase(sl){
   const e=(S.equip&&S.equip[sl.id])||{lv:0,rar:0};
-  return forgeCraftCost()*(0.25+0.25*RARITIES[e.rar||0].mult);
+  return forgeCraftCost()*(0.06+0.06*RARITIES[e.rar||0].mult);
 }
 // 현재 구매 수량 모드(1/10/100/max)에 맞춘 강화 레벨 수·총비용
 function forgeUpInfo(sl){
