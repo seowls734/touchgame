@@ -403,6 +403,7 @@ const HEROES=[
   {id:'archer', nm:'궁수',      ico:'🏹', dps:8,     cost:120},
   {id:'mage',   nm:'마법사',    ico:'🪄', dps:47,    cost:1300},
   {id:'rogue',  nm:'도적',      ico:'🗝️', dps:260,   cost:14000},
+  {id:'gale',   nm:'질풍의 주자',ico:'💨', dps:620,   cost:55000},
   {id:'knight', nm:'기사',      ico:'🛡️', dps:1400,  cost:160000},
   {id:'cleric', nm:'성기사',    ico:'⚜️', dps:7800,  cost:1.8e6},
   {id:'archmage',nm:'대마법사', ico:'🔮', dps:44000, cost:2.2e7},
@@ -504,15 +505,48 @@ const HEROES=[
     seal:{p:60, st:777, relics:'all', heroes:'all', legend:3}},
 ];
 // ── 강화(골드) ──
+// 설계 원칙: 비용 증가율을 효과 증가율에 가깝게 유지해서 "사도 그만"인 레벨이 안 생기게 한다.
+//  · eff  : 레벨당 효과 (곱연산은 배율, 합연산은 가산치)
+//  · max  : 최대 레벨(없으면 무한)
+//  · cur  : 현재 누적 효과를 카드에 보여주는 문구 — 체감이 안 되면 쓸모없어 보이니까 항상 노출
 const UPGRADES=[
-  {id:'click',  nm:'검 강화',   ico:'👆', sub:'클릭 피해 +60%',       baseCost:25,    mult:1.6},
-  {id:'dmg',    nm:'동료 훈련', ico:'⚔️', sub:'모든 동료 DPS +25%',   baseCost:400,   mult:1.9},
-  {id:'gold',   nm:'황금 손길', ico:'💰', sub:'골드 획득 +20%',       baseCost:300,   mult:1.8},
-  {id:'crit',   nm:'정밀 타격', ico:'🎯', sub:'클릭 치명타 확률 +2%', baseCost:5000,  mult:2.1},
-  {id:'critDmg',nm:'강타 수련', ico:'💢', sub:'치명타 피해 +30%',     baseCost:9000,  mult:2.0},
-  {id:'auto',   nm:'자동 검술', ico:'🤖', sub:'자동 공격 +1회/초',    baseCost:60000, mult:2.4},
-  {id:'offline',nm:'야영 기술', ico:'🏕️', sub:'오프라인 효율 +10%',   baseCost:30000, mult:1.9},
+  {id:'click',  nm:'검 강화',   ico:'👆', sub:'클릭 피해 ×1.75',        baseCost:25,     mult:1.55,
+   cur:l=>'현재 ×'+fmt(Math.pow(1.75,l))},
+  {id:'dmg',    nm:'동료 훈련', ico:'⚔️', sub:'모든 동료 DPS ×1.30',    baseCost:400,    mult:1.45,
+   cur:l=>'현재 ×'+fmt(Math.pow(1.30,l))},
+  {id:'gold',   nm:'황금 손길', ico:'💰', sub:'골드 획득 ×1.25',        baseCost:300,    mult:1.35,
+   cur:l=>'현재 ×'+fmt(Math.pow(1.25,l))},
+  {id:'crit',   nm:'정밀 타격', ico:'🎯', sub:'클릭 치명타 확률 +2%p',  baseCost:5000,   mult:1.50, max:40,
+   cur:l=>'현재 +'+(l*2)+'%p'},
+  {id:'critDmg',nm:'강타 수련', ico:'💢', sub:'치명타 피해 +50%p',      baseCost:9000,   mult:1.45,
+   cur:l=>'현재 +'+Math.round(l*50)+'%p'},
+  {id:'boss',   nm:'보스 사냥꾼',ico:'🗡️', sub:'보스에게 주는 피해 ×1.25',baseCost:20000, mult:1.50,
+   cur:l=>'현재 ×'+fmt(Math.pow(1.25,l))},
+  {id:'surge',  nm:'폭풍 연타', ico:'🌪️', sub:'클릭에 총 DPS의 25% 추가',baseCost:150000,mult:1.60,
+   cur:l=>'현재 DPS의 '+(l*25)+'%'},
+  {id:'auto',   nm:'자동 검술', ico:'🤖', sub:'자동 공격 +1회/초',      baseCost:60000,  mult:1.75,
+   cur:l=>'현재 '+l+'회/초'},
+  {id:'offline',nm:'야영 기술', ico:'🏕️', sub:'오프라인 효율 +10%p',    baseCost:30000,  mult:1.55, max:14,
+   cur:l=>'현재 +'+(l*10)+'%p'},
+  {id:'march',  nm:'행군 훈련', ico:'🥾', sub:'스테이지 전진에 필요한 처치 −1', baseCost:500000, mult:25, max:3,
+   cur:l=>'현재 '+(4-l)+'킬마다 전진'},
 ];
+const UPG_MAP={}; UPGRADES.forEach(u=>UPG_MAP[u.id]=u);
+function upgLv(id){ return S.upg[id]||0; }
+function upgMax(u){ return u.max||Infinity; }
+
+// ── 숙련도 ──
+// 강화 총 레벨 10마다 "모든 피해 +5%"(곱연산). 싸구려 강화 한 줄도 끝까지 의미가 남는다.
+const MASTERY_STEP=10, MASTERY_PER=0.05;
+function masteryLevels(){
+  let t=0; for(const u of UPGRADES) t+=upgLv(u.id);
+  return t;
+}
+function masteryRank(){ return Math.floor(masteryLevels()/MASTERY_STEP); }
+function masteryMult(){ return Math.pow(1+MASTERY_PER, masteryRank()); }
+// 보스 사냥꾼
+function upgBossMult(){ return Math.pow(1.25, upgLv('boss')); }
+
 // ── 정수(환생) 상점: 영구 강화 ──
 const GEMSHOP=[
   {id:'gAll',   nm:'영웅의 유산', ico:'🌟', sub:'모든 피해 +25% / 레벨',          baseCost:1, mult:1.35, key:'gALL'},
@@ -653,6 +687,7 @@ const HERO_PERKS={
   archer:  {nm:'급소 사격', type:'crit',     per:0.04, every:20, fmt:v=>'클릭 치명타 확률 +'+Math.round(v*100)+'%'},
   mage:    {nm:'비전 폭격', type:'dps',      per:0.15, every:25, fmt:v=>'모든 DPS +'+Math.round(v*100)+'%'},
   rogue:   {nm:'보물 사냥', type:'gold',     per:0.20, every:25, fmt:v=>'골드 획득 +'+Math.round(v*100)+'%'},
+  gale:    {nm:'질풍 난무', type:'auto',     per:1,    every:15, fmt:v=>'자동 공격 +'+v+'회/초'},
   knight:  {nm:'수호 결계', type:'bossTime', per:2,    every:20, fmt:v=>'보스 제한시간 +'+v+'초'},
   cleric:  {nm:'신성 축복', type:'allDmg',   per:0.10, every:25, fmt:v=>'모든 피해 +'+Math.round(v*100)+'%'},
   archmage:{nm:'심연 폭발', type:'critDmg',  per:1,    every:25, fmt:v=>'치명타 피해 +'+Math.round(v*100)+'%'},
@@ -846,7 +881,7 @@ function defaultState(){
   return {
     gold:0, gems:0, stage:1, maxStage:1, frontier:1,
     heroes:{},
-    upg:{click:0,dmg:0,gold:0,crit:0,critDmg:0,auto:0,offline:0},
+    upg:{click:0,dmg:0,gold:0,crit:0,critDmg:0,boss:0,surge:0,auto:0,offline:0,march:0},
     gem:{gALL:0,gGold:0,gStart:0,gCrit:0,gAuto:0,gOffline:0,gSkill:0},
     relics:{},
     equip:{},                                  // 대장간 장비: {slotId:{lv,rar}}
@@ -959,13 +994,16 @@ function eventAutoAdd(){ return evBuff('auto')||0; }
 // ── 파생 수치 ──
 function clickPower(){
   const eq=equipFx(), rs=researchFx();
-  return Math.ceil(1*Math.pow(1.6,S.upg.click))*gemAllMult()*heroFx().click*relicFx().click
-    *eq.click*eq.allDmg*rs.click*rs.allDmg*skillDmgMult()*eventDmgMult();
+  const base=Math.ceil(1*Math.pow(1.75,upgLv('click')))*gemAllMult()*heroFx().click*relicFx().click
+    *eq.click*eq.allDmg*rs.click*rs.allDmg*skillDmgMult()*eventDmgMult()*masteryMult();
+  // 폭풍 연타: 클릭 한 번이 동료 DPS의 일부를 그대로 얹는다 — 후반에도 클릭이 죽지 않게
+  return base + totalDps()*0.25*upgLv('surge');
 }
 function totalDps(){
   let d=0;
   for(const h of HEROES) d+=(S.heroes[h.id]||0)*h.dps;
-  d*=Math.pow(1.25,S.upg.dmg);   // 동료 훈련
+  d*=Math.pow(1.30,upgLv('dmg'));  // 동료 훈련
+  d*=masteryMult();              // 숙련도
   d*=gemAllMult();
   d*=heroFx().dps;               // 동료 특수 능력
   d*=relicFx().dps;              // 유물
@@ -975,12 +1013,12 @@ function totalDps(){
   d*=eventDmgMult();             // 이벤트 버프
   return d;
 }
-function goldMult(){ return Math.pow(1.20,S.upg.gold)*Math.pow(1.30,S.gem.gGold||0)*relicFx().gold*equipFx().gold*researchFx().gold*skillGoldMult()*eventGoldMult(); }
-// 자동 공격 횟수/초 (자동 검술 + 영혼 분신 + 이벤트 분신)
-function autoRate(){ return (S.upg.auto||0)+(S.gem.gAuto||0)+eventAutoAdd(); }
+function goldMult(){ return Math.pow(1.25,upgLv('gold'))*Math.pow(1.30,S.gem.gGold||0)*relicFx().gold*equipFx().gold*researchFx().gold*skillGoldMult()*eventGoldMult(); }
+// 자동 공격 횟수/초 (자동 검술 + 영혼 분신 + 질풍의 주자 + 이벤트 분신)
+function autoRate(){ return (S.upg.auto||0)+(S.gem.gAuto||0)+heroFx().auto+eventAutoAdd(); }
 // 치명타 확률/배율 (강화·정수·유물·동료 합산)
 function critChance(){ return Math.min(0.95, CRIT_CHANCE+heroFx().crit+relicFx().crit+researchFx().crit+equipFx().crit+0.02*(S.upg.crit||0)+0.03*(S.gem.gCrit||0)+eventCritAdd()); }
-function critMult(){ return CRIT_MULT+heroFx().critDmg+equipFx().critDmg+0.30*(S.upg.critDmg||0); }
+function critMult(){ return CRIT_MULT+heroFx().critDmg+equipFx().critDmg+0.50*upgLv('critDmg'); }
 // 보스 제한시간 보너스 (동료+유물)
 function bossTimeBonus(){ return heroFx().bossTime+relicFx().bossTime; }
 // 오프라인 효율 (기본 0.6 + 강화/정수/유물)
@@ -991,7 +1029,7 @@ function gemAllMult(){ return 1+0.25*(S.gem.gALL||0); }
 
 // 동료 특수 능력 합산 → 각종 보정치
 function heroFx(){
-  const fx={click:1,dps:1,gold:1,crit:0,critDmg:0,bossDmg:1,bossTime:0,gem:0};
+  const fx={click:1,dps:1,gold:1,crit:0,critDmg:0,bossDmg:1,bossTime:0,gem:0,auto:0};
   for(const h of HEROES){
     const c=S.heroes[h.id]||0; if(c<=0)continue;
     const p=HERO_PERKS[h.id]; if(!p)continue;
@@ -1005,6 +1043,7 @@ function heroFx(){
       case 'critDmg': fx.critDmg+=v; break;
       case 'bossDmg': fx.bossDmg*=1+v; break;
       case 'bossTime':fx.bossTime+=v;  break;
+      case 'auto':    fx.auto+=v;      break;
       case 'gemFind': fx.gem+=v;     break;
     }
   }
@@ -1042,7 +1081,8 @@ function goldReward(stage,boss){
   return Math.ceil(g*goldMult()*heroFx().gold);
 }
 function isBossStage(st){return st%10===0;}
-function killsNeeded(st){return isBossStage(st)?1:4;} // 일반 스테이지는 4킬마다 전진
+// 일반 스테이지는 4킬마다 전진 — 행군 훈련으로 최대 1킬까지 줄일 수 있다
+function killsNeeded(st){return isBossStage(st)?1:Math.max(1,4-upgLv('march'));}
 
 // ── 환생(프레스티지) 보상 ──
 // 환생할 때마다 다음 환생에 필요한 최소 스테이지가 10씩 올라간다.
@@ -1105,7 +1145,7 @@ function renderHp(){
 // ── 데미지 적용 / 처치 ──
 function dealDamage(amt,fromClick,crit){
   if(mob.hp<=0)return;
-  if(mob.boss)amt*=heroFx().bossDmg*equipFx().bossDmg; // 용기사·망토: 보스 추가 피해
+  if(mob.boss)amt*=heroFx().bossDmg*equipFx().bossDmg*upgBossMult(); // 용기사·망토·보스 사냥꾼
   mob.hp-=amt;
   if(fromClick)floatNum(amt,!!crit,crit?'#ff5a78':'#ffd86b');
   if(mob.hp<=0)onKill();
@@ -1724,7 +1764,7 @@ function renderShop(){
       const locked=seal || (i>0 && (S.heroes[HEROES[i-1].id]||0)<1 && have===0);
       const {n,sum}=resolveQty(h.cost,1.15,have,S.gold);
       const ok=!locked&&S.gold>=sum;
-      const addDps=h.dps*n*Math.pow(1.25,S.upg.dmg)*gemAllMult();
+      const addDps=h.dps*n*Math.pow(1.30,upgLv('dmg'))*gemAllMult()*masteryMult();
       const p=HERO_PERKS[h.id];
       const steps=perkSteps(have,p.every), nextAt=steps*p.every+1;
       const perkLvl = seal
@@ -1887,15 +1927,32 @@ function renderShop(){
     list.appendChild(info);
   }else if(activeTab==='up'){
     UPGRADES.forEach(u=>{
-      const have=S.upg[u.id]||0;
-      const {n,sum}=resolveQty(u.baseCost,u.mult,have,S.gold);
+      const have=upgLv(u.id), cap=upgMax(u);
+      if(have>=cap){
+        list.appendChild(card({ ico:u.ico, nm:u.nm, sub:u.sub,
+          lvl:`레벨 ${have} · ${u.cur(have)}`, cost:'MAX', costCls:'ok', onclick:()=>{} }));
+        return;
+      }
+      let {n,sum}=resolveQty(u.baseCost,u.mult,have,S.gold);
+      n=Math.min(n,cap-have); sum=costFor(u.baseCost,u.mult,have,n);
       const ok=S.gold>=sum;
+      const hint=affordHint(n,sum,have,S.gold,lv=>u.baseCost*Math.pow(u.mult,lv));
       list.appendChild(card({
-        ico:u.ico, nm:u.nm, sub:u.sub, lvl:`레벨 ${have}`,
-        cost:'💰 '+fmt(sum), costCls:ok?'ok':'no',
+        ico:u.ico, nm:u.nm, sub:u.sub,
+        lvl:`레벨 ${have}`+(n>1?` → ${have+n}`:'')+` · ${u.cur(have)}`+(hint?' · '+hint:''),
+        cost:'💰 '+fmt(sum)+(n>1?`<div style="font-size:10px;opacity:.7">×${n}</div>`:''),
+        costCls:ok?'ok':'no',
         onclick:()=>{ if(S.gold<sum)return; S.gold-=sum; S.upg[u.id]=have+n; updateTop();renderShop();flashSave(); }
       }));
     });
+    // 숙련도 — 모든 강화가 끝까지 의미를 갖게 해주는 총합 보너스
+    const lv=masteryLevels(), rank=masteryRank(), toNext=MASTERY_STEP-(lv%MASTERY_STEP);
+    const mi=document.createElement('div');
+    mi.style.cssText='font-size:11px;color:var(--dim);text-align:center;padding:8px;line-height:1.7';
+    mi.innerHTML=`📚 <b>숙련도 ${rank}단</b> · 강화 총 레벨 ${lv}<br>`+
+      `· 강화를 ${MASTERY_STEP}레벨 올릴 때마다 <b style="color:var(--gold)">모든 피해 +${Math.round(MASTERY_PER*100)}%</b> (곱연산)<br>`+
+      `· 현재 모든 피해 <b style="color:var(--gold)">×${fmt(masteryMult())}</b> · 다음 단계까지 ${toNext}레벨`;
+    list.appendChild(mi);
   }else if(activeTab==='gem'){
     GEMSHOP.forEach(g=>{
       const have=S.gem[g.key]||0;
@@ -2121,7 +2178,7 @@ function load(){
   let raw=null; try{raw=localStorage.getItem(SAVE_KEY);}catch(e){}
   if(raw){
     try{ const d=JSON.parse(raw); S=Object.assign(defaultState(),d);
-      S.upg=Object.assign({click:0,dmg:0,gold:0,crit:0,critDmg:0,auto:0,offline:0},d.upg||{});
+      S.upg=Object.assign({click:0,dmg:0,gold:0,crit:0,critDmg:0,boss:0,surge:0,auto:0,offline:0,march:0},d.upg||{});
       S.gem=Object.assign({gALL:0,gGold:0,gStart:0,gCrit:0,gAuto:0,gOffline:0,gSkill:0},d.gem||{});
       S.relics=d.relics||{};
       S.equip=d.equip||{};
