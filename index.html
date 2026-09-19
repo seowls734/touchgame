@@ -510,20 +510,26 @@ const HEROES=[
 //  · max  : 최대 레벨(없으면 무한)
 //  · cur  : 현재 누적 효과를 카드에 보여주는 문구 — 체감이 안 되면 쓸모없어 보이니까 항상 노출
 const UPGRADES=[
-  // 비용 배율(1.90)이 효과 배율(1.75)보다 커야 한다. 반대면 레벨을 올릴수록 이득이 커져
-  // 수치가 끝없이 불어나고 결국 ∞가 된다(예전 1.55는 이 조건을 어겨 후반에 터졌다).
-  {id:'click',  nm:'검 강화',   ico:'👆', sub:'클릭 피해 ×1.75',        baseCost:25,     mult:1.90, max:200,
-   cur:l=>'현재 ×'+fmt(Math.pow(1.75,l))},
-  {id:'dmg',    nm:'동료 훈련', ico:'⚔️', sub:'모든 동료 DPS ×1.30',    baseCost:400,    mult:1.45, max:300,
-   cur:l=>'현재 ×'+fmt(Math.pow(1.30,l))},
-  {id:'gold',   nm:'황금 손길', ico:'💰', sub:'골드 획득 ×1.25',        baseCost:300,    mult:1.35, max:300,
-   cur:l=>'현재 ×'+fmt(Math.pow(1.25,l))},
+  // 곱연산 강화는 soft 레벨까지만 eff 배로 곱해지고, 그 뒤로는 레벨당 postAdd 만큼
+  // "덧셈"으로 붙는다(소프트 캡). 계속 살 게 남으면서도 수치가 지수적으로 터지지 않는다.
+  // 비용은 soft 이후 다항식으로 올라, 계속 감당할 수 있는 선에서 비싸진다.
+  // 전제: mult > eff. 반대면 레벨을 올릴수록 이득이 커져 결국 ∞가 된다.
+  {id:'click',  nm:'검 강화',   ico:'👆', sub:'클릭 피해 ×1.75',        baseCost:25,     mult:1.90,
+   eff:1.75, soft:200, postAdd:0.10,
+   cur:l=>'현재 ×'+fmt(upgEffAt(UPG_MAP.click,l))},
+  {id:'dmg',    nm:'동료 훈련', ico:'⚔️', sub:'모든 동료 DPS ×1.30',    baseCost:400,    mult:1.45,
+   eff:1.30, soft:300, postAdd:0.10,
+   cur:l=>'현재 ×'+fmt(upgEffAt(UPG_MAP.dmg,l))},
+  {id:'gold',   nm:'황금 손길', ico:'💰', sub:'골드 획득 ×1.25',        baseCost:300,    mult:1.35,
+   eff:1.25, soft:300, postAdd:0.08,
+   cur:l=>'현재 ×'+fmt(upgEffAt(UPG_MAP.gold,l))},
   {id:'crit',   nm:'정밀 타격', ico:'🎯', sub:'클릭 치명타 확률 +2%p',  baseCost:5000,   mult:1.50, max:40,
    cur:l=>'현재 +'+(l*2)+'%p'},
-  {id:'critDmg',nm:'강타 수련', ico:'💢', sub:'치명타 피해 +50%p',      baseCost:9000,   mult:1.45, max:200,
+  {id:'critDmg',nm:'강타 수련', ico:'💢', sub:'치명타 피해 +50%p',      baseCost:9000,   mult:1.45,
    cur:l=>'현재 +'+Math.round(l*50)+'%p'},
-  {id:'boss',   nm:'보스 사냥꾼',ico:'🗡️', sub:'보스에게 주는 피해 ×1.25',baseCost:20000, mult:1.50, max:200,
-   cur:l=>'현재 ×'+fmt(Math.pow(1.25,l))},
+  {id:'boss',   nm:'보스 사냥꾼',ico:'🗡️', sub:'보스에게 주는 피해 ×1.25',baseCost:20000, mult:1.50,
+   eff:1.25, soft:200, postAdd:0.08,
+   cur:l=>'현재 ×'+fmt(upgEffAt(UPG_MAP.boss,l))},
   {id:'surge',  nm:'폭풍 연타', ico:'🌪️', sub:'클릭에 총 DPS의 25% 추가',baseCost:150000,mult:1.60, max:100,
    cur:l=>'현재 DPS의 '+(l*25)+'%'},
   {id:'auto',   nm:'자동 검술', ico:'🤖', sub:'자동 공격 +1회/초',      baseCost:60000,  mult:1.75, max:100,
@@ -536,18 +542,55 @@ const UPGRADES=[
 const UPG_MAP={}; UPGRADES.forEach(u=>UPG_MAP[u.id]=u);
 function upgLv(id){ return S.upg[id]||0; }
 function upgMax(u){ return u.max||Infinity; }
+// ── 소프트 캡 계산 ──
+// soft 레벨까지: eff^lv (곱연산) · 그 뒤: 레벨당 postAdd 만큼 덧셈
+function upgEffAt(u,lv){
+  if(!u||!u.eff)return 1;
+  const s=u.soft||Infinity, over=Math.max(0,lv-s);
+  return cap(Math.pow(u.eff,Math.min(lv,s))*(1+(u.postAdd||0)*over));
+}
+function upgMult(id){ return upgEffAt(UPG_MAP[id],upgLv(id)); }
+// 비용은 soft 이후 지수가 아니라 다항식으로 오른다.
+// 지수로 두면 효과(덧셈)보다 비용이 비교도 안 되게 빨리 올라 "살 이유가 없는 레벨"이 된다.
+const UPG_POST_POW=2.0;
+function upgCostAt(u,lv){
+  const s=u.soft||Infinity, over=Math.max(0,lv-s);
+  const base=u.baseCost*Math.pow(u.mult,Math.min(lv,s));
+  return cap(over>0?base*Math.pow(1+over,UPG_POST_POW):base);
+}
+function upgCostFor(u,have,qty){
+  let c=0;
+  for(let i=0;i<qty;i++){ const b=upgCostAt(u,have+i); if(!isFinite(b))return NUM_CAP; c+=b; }
+  return cap(c);
+}
+function upgMaxAfford(u,have,gold){
+  let n=0,sum=0;
+  const g=cap(gold), lim=Math.min(100000,(upgMax(u)-have)||100000);
+  while(n<lim){ const b=upgCostAt(u,have+n); if(!isFinite(b)||sum+b>g)break; sum+=b; n++; }
+  return {n,sum:cap(sum)};
+}
+function resolveQtyUpg(u,have,gold){
+  if(buyMode!=='max'){
+    const n=Math.min(buyMode,upgMax(u)-have);
+    return {n,sum:upgCostFor(u,have,n)};
+  }
+  const r=upgMaxAfford(u,have,gold);
+  return r.n<1?{n:Math.min(1,upgMax(u)-have),sum:upgCostFor(u,have,1)}:r;
+}
 
 // ── 숙련도 ──
 // 강화 총 레벨 10마다 "모든 피해 +5%"(곱연산). 싸구려 강화 한 줄도 끝까지 의미가 남는다.
-const MASTERY_STEP=10, MASTERY_PER=0.05;
+// 숙련도는 강화 총 레벨에 곱연산으로 붙는다. 소프트 캡 이후 레벨이 수만까지 늘 수 있으므로
+// 단수에 상한을 두지 않으면 여기가 새로운 폭주점이 된다(1.05^단수).
+const MASTERY_STEP=10, MASTERY_PER=0.05, MASTERY_MAX_RANK=300;
 function masteryLevels(){
   let t=0; for(const u of UPGRADES) t+=upgLv(u.id);
   return t;
 }
-function masteryRank(){ return Math.floor(masteryLevels()/MASTERY_STEP); }
+function masteryRank(){ return Math.min(MASTERY_MAX_RANK, Math.floor(masteryLevels()/MASTERY_STEP)); }
 function masteryMult(){ return cap(Math.pow(1+MASTERY_PER, masteryRank())); }
 // 보스 사냥꾼
-function upgBossMult(){ return cap(Math.pow(1.25, upgLv('boss'))); }
+function upgBossMult(){ return upgMult('boss'); }
 
 // ── 정수(환생) 상점: 영구 강화 ──
 const GEMSHOP=[
@@ -1014,7 +1057,7 @@ function eventAutoAdd(){ return evBuff('auto')||0; }
 // ── 파생 수치 ──
 function clickPower(){
   const eq=equipFx(), rs=researchFx();
-  const base=Math.ceil(1*Math.pow(1.75,upgLv('click')))*gemAllMult()*heroFx().click*relicFx().click
+  const base=Math.ceil(upgMult('click'))*gemAllMult()*heroFx().click*relicFx().click
     *eq.click*eq.allDmg*rs.click*rs.allDmg*skillDmgMult()*eventDmgMult()*masteryMult();
   // 폭풍 연타: 클릭 한 번이 동료 DPS의 일부를 그대로 얹는다 — 후반에도 클릭이 죽지 않게
   return cap(cap(base) + totalDps()*0.25*upgLv('surge'));
@@ -1022,7 +1065,7 @@ function clickPower(){
 function totalDps(){
   let d=0;
   for(const h of HEROES) d+=(S.heroes[h.id]||0)*h.dps;
-  d*=Math.pow(1.30,upgLv('dmg'));  // 동료 훈련
+  d*=upgMult('dmg');             // 동료 훈련
   d*=masteryMult();              // 숙련도
   d*=gemAllMult();
   d*=heroFx().dps;               // 동료 특수 능력
@@ -1033,7 +1076,7 @@ function totalDps(){
   d*=eventDmgMult();             // 이벤트 버프
   return cap(d);
 }
-function goldMult(){ return cap(Math.pow(1.25,upgLv('gold'))*Math.pow(1.30,S.gem.gGold||0)*relicFx().gold*equipFx().gold*researchFx().gold*skillGoldMult()*eventGoldMult()); }
+function goldMult(){ return cap(upgMult('gold')*Math.pow(1.30,S.gem.gGold||0)*relicFx().gold*equipFx().gold*researchFx().gold*skillGoldMult()*eventGoldMult()); }
 // 자동 공격 횟수/초 (자동 검술 + 영혼 분신 + 질풍의 주자 + 이벤트 분신)
 function autoRate(){ return (S.upg.auto||0)+(S.gem.gAuto||0)+heroFx().auto+eventAutoAdd(); }
 // 치명타 확률/배율 (강화·정수·유물·동료 합산)
@@ -1792,7 +1835,7 @@ function renderShop(){
       const locked=seal || (i>0 && (S.heroes[HEROES[i-1].id]||0)<1 && have===0);
       const {n,sum}=resolveQty(h.cost,1.15,have,S.gold);
       const ok=!locked&&S.gold>=sum;
-      const addDps=h.dps*n*Math.pow(1.30,upgLv('dmg'))*gemAllMult()*masteryMult();
+      const addDps=h.dps*n*upgMult('dmg')*gemAllMult()*masteryMult();
       const p=HERO_PERKS[h.id];
       const steps=perkSteps(have,p.every), nextAt=steps*p.every+1;
       const perkLvl = seal
@@ -1961,13 +2004,16 @@ function renderShop(){
           lvl:`레벨 ${have} · ${u.cur(have)}`, cost:'MAX', costCls:'ok', onclick:()=>{} }));
         return;
       }
-      let {n,sum}=resolveQty(u.baseCost,u.mult,have,S.gold);
-      n=Math.min(n,lvCap-have); sum=costFor(u.baseCost,u.mult,have,n);
+      let {n,sum}=resolveQtyUpg(u,have,S.gold);
+      n=Math.min(n,lvCap-have); sum=upgCostFor(u,have,n);
       const ok=S.gold>=sum;
-      const hint=affordHint(n,sum,have,S.gold,lv=>u.baseCost*Math.pow(u.mult,lv));
+      const hint=affordHint(n,sum,have,S.gold,lv=>upgCostAt(u,lv));
+      // 소프트 캡을 넘으면 효과가 곱연산에서 덧셈으로 바뀐다 — 카드에 그대로 알려 준다
+      const soft=u.soft&&have>=u.soft
+        ? ` <span style="color:var(--dim)">(+${Math.round(u.postAdd*100)}%p/레벨)</span>` : '';
       list.appendChild(card({
         ico:u.ico, nm:u.nm, sub:u.sub,
-        lvl:`레벨 ${have}`+(n>1?` → ${have+n}`:'')+` · ${u.cur(have)}`+(hint?' · '+hint:''),
+        lvl:`레벨 ${have}`+(n>1?` → ${have+n}`:'')+` · ${u.cur(have)}`+soft+(hint?' · '+hint:''),
         cost:'💰 '+fmt(sum)+(n>1?`<div style="font-size:10px;opacity:.7">×${n}</div>`:''),
         costCls:ok?'ok':'no',
         onclick:()=>{ if(S.gold<sum)return; S.gold-=sum; S.upg[u.id]=have+n; updateTop();renderShop();flashSave(); }
@@ -1979,7 +2025,8 @@ function renderShop(){
     mi.style.cssText='font-size:11px;color:var(--dim);text-align:center;padding:8px;line-height:1.7';
     mi.innerHTML=`📚 <b>숙련도 ${rank}단</b> · 강화 총 레벨 ${lv}<br>`+
       `· 강화를 ${MASTERY_STEP}레벨 올릴 때마다 <b style="color:var(--gold)">모든 피해 +${Math.round(MASTERY_PER*100)}%</b> (곱연산)<br>`+
-      `· 현재 모든 피해 <b style="color:var(--gold)">×${fmt(masteryMult())}</b> · 다음 단계까지 ${toNext}레벨`;
+      `· 현재 모든 피해 <b style="color:var(--gold)">×${fmt(masteryMult())}</b>`+
+      (rank>=MASTERY_MAX_RANK?` · <b>최대 단수 도달</b>`:` · 다음 단계까지 ${toNext}레벨`);
     list.appendChild(mi);
   }else if(activeTab==='gem'){
     GEMSHOP.forEach(g=>{
