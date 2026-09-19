@@ -2012,7 +2012,13 @@ function renderShop(){
            :'최고 티어에 도달했습니다 🎉')+'</div>';
     list.appendChild(head);
 
-    // ② 부문 선택 — 종합 / 스테이지 / DPS / 환생
+    // ② 온라인 연결 상태
+    const net=document.createElement('div');
+    net.style.cssText='font-size:11px;color:var(--dim);text-align:center;padding:0 0 8px';
+    net.textContent=fbStatusText();
+    list.appendChild(net);
+
+    // ③ 부문 선택 — 종합 / 스테이지 / DPS / 환생
     const bar=document.createElement('div');
     bar.style.cssText='display:flex;gap:4px;margin-bottom:8px;flex-wrap:wrap';
     RANK_CATS.forEach(c=>{
@@ -2026,7 +2032,7 @@ function renderShop(){
     });
     list.appendChild(bar);
 
-    // ③ 순위표
+    // ④ 순위표
     const cat=RANK_CATS.find(x=>x.id===rankCat)||RANK_CATS[0];
     const arr=rankList(rankCat);
     const medal=i=>i===0?'🥇':(i===1?'🥈':(i===2?'🥉':'#'+(i+1)));
@@ -2034,7 +2040,7 @@ function renderShop(){
       const isMe=e.name===me, et=tierOf(rankScore(e));
       const el=card({
         ico:medal(i),
-        nm:(isMe?'⭐ ':'')+e.name+
+        nm:(isMe?'⭐ ':'')+(e.online?'🌐 ':'')+e.name+
            (e.rival?' <span style="opacity:.6;font-size:10px">(라이벌)</span>':
             (e.guest?' <span style="opacity:.6;font-size:10px">(게스트)</span>':'')),
         sub:'<span style="color:'+et.col+'">'+et.ico+' '+et.nm+'</span> · 🗼 St.'+(e.stage||1)+' · 💀 '+(e.prestiges||0),
@@ -2046,7 +2052,7 @@ function renderShop(){
       list.appendChild(el);
     });
 
-    // ④ 이상치로 걸러진 기록 — 순위에는 넣지 않고 사유와 함께 보여준다
+    // ⑤ 이상치로 걸러진 기록 — 순위에는 넣지 않고 사유와 함께 보여준다
     const bad=rankFlagged();
     if(bad.length){
       const t=document.createElement('div');
@@ -2073,7 +2079,8 @@ function renderShop(){
     info.innerHTML='🏆 <b>'+cat.nm+'</b> 부문 · 내 순위 <b style="color:var(--gem)">'+(mr?mr+'위':'-')+'</b> / '+arr.length+'명<br>'+
       '· <b>RP</b> = 스테이지 + 환생 + DPS·골드·처치(로그 환산) 합산 점수<br>'+
       '· RP가 쌓이면 '+TIERS.map(t=>t.ico).join('→')+' 순으로 티어가 올라갑니다<br>'+
-      '· 이 브라우저의 계정들과 고정 라이벌이 함께 집계됩니다<br>'+
+      (fb.on?'· 🌐 표시는 다른 기기에서 올라온 기록입니다<br>'
+            :'· 이 브라우저의 계정들과 고정 라이벌이 함께 집계됩니다<br>')+
       '· 규칙상 불가능한 기록은 자동으로 순위에서 빠집니다';
     list.appendChild(info);
   }else{ // ach — 도전과제
@@ -2275,8 +2282,11 @@ function rankValid(e){ return rankFlags(e).length===0; }
 function rankEntries(){
   const r=loadRanks(), arr=[];
   for(const k in r){ const e=Object.assign({},r[k]); e.name=e.name||k; arr.push(e); }
+  // 서버 기록을 합친다 — 내 기록은 로컬 쪽이 항상 최신이므로 서버본을 버린다
+  onlineRanks.forEach(o=>{ if(o.uid!==fb.uid) arr.push(Object.assign({},o)); });
   const have={}; arr.forEach(e=>have[e.name]=1);
-  RIVALS.forEach(b=>{ if(!have[b.name]) arr.push(Object.assign({rival:true},b)); });
+  // 라이벌은 온라인 보드가 살아 있으면 자리를 비켜 준다
+  if(!fb.on) RIVALS.forEach(b=>{ if(!have[b.name]) arr.push(Object.assign({rival:true},b)); });
   return arr;
 }
 function rankList(cat){
@@ -2305,9 +2315,71 @@ function submitScore(){
   cur.rp=Math.round(rankScore(cur));
   cur.bestTier=Math.max(prev.bestTier||0,TIERS.indexOf(after));
   r[nm]=cur; saveRanks(r);
+  fbSubmit(cur);
   // 티어가 올라가면 한 번만 알려준다
   if(prev.stage!==undefined && TIERS.indexOf(after)>TIERS.indexOf(before))
     floatNum(after.ico+' '+after.nm+' 승급!',true,after.col);
+}
+
+// ── 온라인 랭킹(Firebase) ──
+// FB_CONFIG를 채우면 켜지고, 비워 두면 예전처럼 로컬 전용으로만 돈다.
+// 실제 검증은 Firestore 보안 규칙(firestore.rules)이 맡는다 — 아래 코드는 편의일 뿐이다.
+const FB_CONFIG=null;   // 예: {apiKey:'…', authDomain:'…', projectId:'…', appId:'…'}
+const FB_SDK='https://www.gstatic.com/firebasejs/10.12.5/';
+const FB_BOARD_LIMIT=100;        // 보드에 내려받는 최대 인원
+const FB_PUSH_MS=60000;          // 서버 기록 갱신 최소 간격
+
+let onlineRanks=[];              // 서버에서 받아 온 기록
+const fb={on:false, status:'off', msg:'', uid:null, setDoc:null, ref:null, lastPush:0, lastRp:-1};
+
+function fbStatusText(){
+  if(!FB_CONFIG)          return '📴 로컬 전용 — 이 브라우저의 기록만 표시됩니다';
+  if(fb.status==='ready') return '🌐 온라인 랭킹 연결됨 · '+onlineRanks.length+'명 집계';
+  if(fb.status==='conn')  return '🌐 온라인 랭킹 연결 중…';
+  return '⚠️ 온라인 연결 실패 — 로컬 기록만 표시합니다'+(fb.msg?' ('+fb.msg+')':'');
+}
+
+async function fbInit(){
+  if(!FB_CONFIG||fb.status!=='off')return;
+  fb.status='conn';
+  try{
+    const [{initializeApp},{getAuth,signInAnonymously,onAuthStateChanged},fs]=await Promise.all([
+      import(FB_SDK+'firebase-app.js'),
+      import(FB_SDK+'firebase-auth.js'),
+      import(FB_SDK+'firebase-firestore.js'),
+    ]);
+    const app=initializeApp(FB_CONFIG), auth=getAuth(app), db=fs.getFirestore(app);
+    await signInAnonymously(auth);
+    await new Promise(res=>onAuthStateChanged(auth,u=>{ if(u){ fb.uid=u.uid; res(); } }));
+
+    fb.setDoc=data=>fs.setDoc(fs.doc(db,'ranks',fb.uid),data);
+    // 상위 기록을 실시간으로 구독한다
+    fs.onSnapshot(
+      fs.query(fs.collection(db,'ranks'),fs.orderBy('rp','desc'),fs.limit(FB_BOARD_LIMIT)),
+      snap=>{
+        onlineRanks=snap.docs.map(d=>Object.assign({uid:d.id,online:true},d.data()));
+        fb.status='ready'; fb.on=true;
+        if(activeTab==='rank')renderShop();
+      },
+      err=>{ fb.status='fail'; fb.msg=err.code||'구독 실패'; if(activeTab==='rank')renderShop(); }
+    );
+  }catch(e){
+    fb.status='fail'; fb.msg=(e&&(e.code||e.message))||'연결 실패';
+    if(activeTab==='rank')renderShop();
+  }
+}
+
+function fbSubmit(cur){
+  if(!fb.setDoc||!fb.uid)return;
+  // 규칙상 불가능한 기록은 서버에 올리지 않는다(어차피 규칙에서 거부된다)
+  if(!rankValid(cur))return;
+  const now=Date.now();
+  if(cur.rp<=fb.lastRp)return;                 // 기록이 나아졌을 때만
+  if(now-fb.lastPush<FB_PUSH_MS)return;        // 쓰기 횟수를 아낀다
+  fb.lastPush=now; fb.lastRp=cur.rp;
+  fb.setDoc({name:cur.name, stage:cur.stage, prestiges:cur.prestiges,
+             dps:cur.dps, gold:cur.gold, kills:cur.kills, rp:cur.rp, at:now})
+    .catch(e=>{ fb.msg=(e&&e.code)||'기록 거부됨'; fb.lastRp=-1; });   // 실패하면 다음 기회에 다시 시도
 }
 
 // ── 저장 / 불러오기 ──
@@ -2714,6 +2786,7 @@ function startGame(){
 
   load();
   gameReady=true;
+  fbInit();                      // 온라인 랭킹(설정돼 있을 때만)
   lastTick=Date.now();
   spawnMob();
   renderSkills();
