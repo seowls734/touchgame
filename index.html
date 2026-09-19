@@ -510,21 +510,23 @@ const HEROES=[
 //  · max  : 최대 레벨(없으면 무한)
 //  · cur  : 현재 누적 효과를 카드에 보여주는 문구 — 체감이 안 되면 쓸모없어 보이니까 항상 노출
 const UPGRADES=[
-  {id:'click',  nm:'검 강화',   ico:'👆', sub:'클릭 피해 ×1.75',        baseCost:25,     mult:1.55,
+  // 비용 배율(1.90)이 효과 배율(1.75)보다 커야 한다. 반대면 레벨을 올릴수록 이득이 커져
+  // 수치가 끝없이 불어나고 결국 ∞가 된다(예전 1.55는 이 조건을 어겨 후반에 터졌다).
+  {id:'click',  nm:'검 강화',   ico:'👆', sub:'클릭 피해 ×1.75',        baseCost:25,     mult:1.90, max:200,
    cur:l=>'현재 ×'+fmt(Math.pow(1.75,l))},
-  {id:'dmg',    nm:'동료 훈련', ico:'⚔️', sub:'모든 동료 DPS ×1.30',    baseCost:400,    mult:1.45,
+  {id:'dmg',    nm:'동료 훈련', ico:'⚔️', sub:'모든 동료 DPS ×1.30',    baseCost:400,    mult:1.45, max:300,
    cur:l=>'현재 ×'+fmt(Math.pow(1.30,l))},
-  {id:'gold',   nm:'황금 손길', ico:'💰', sub:'골드 획득 ×1.25',        baseCost:300,    mult:1.35,
+  {id:'gold',   nm:'황금 손길', ico:'💰', sub:'골드 획득 ×1.25',        baseCost:300,    mult:1.35, max:300,
    cur:l=>'현재 ×'+fmt(Math.pow(1.25,l))},
   {id:'crit',   nm:'정밀 타격', ico:'🎯', sub:'클릭 치명타 확률 +2%p',  baseCost:5000,   mult:1.50, max:40,
    cur:l=>'현재 +'+(l*2)+'%p'},
-  {id:'critDmg',nm:'강타 수련', ico:'💢', sub:'치명타 피해 +50%p',      baseCost:9000,   mult:1.45,
+  {id:'critDmg',nm:'강타 수련', ico:'💢', sub:'치명타 피해 +50%p',      baseCost:9000,   mult:1.45, max:200,
    cur:l=>'현재 +'+Math.round(l*50)+'%p'},
-  {id:'boss',   nm:'보스 사냥꾼',ico:'🗡️', sub:'보스에게 주는 피해 ×1.25',baseCost:20000, mult:1.50,
+  {id:'boss',   nm:'보스 사냥꾼',ico:'🗡️', sub:'보스에게 주는 피해 ×1.25',baseCost:20000, mult:1.50, max:200,
    cur:l=>'현재 ×'+fmt(Math.pow(1.25,l))},
-  {id:'surge',  nm:'폭풍 연타', ico:'🌪️', sub:'클릭에 총 DPS의 25% 추가',baseCost:150000,mult:1.60,
+  {id:'surge',  nm:'폭풍 연타', ico:'🌪️', sub:'클릭에 총 DPS의 25% 추가',baseCost:150000,mult:1.60, max:100,
    cur:l=>'현재 DPS의 '+(l*25)+'%'},
-  {id:'auto',   nm:'자동 검술', ico:'🤖', sub:'자동 공격 +1회/초',      baseCost:60000,  mult:1.75,
+  {id:'auto',   nm:'자동 검술', ico:'🤖', sub:'자동 공격 +1회/초',      baseCost:60000,  mult:1.75, max:100,
    cur:l=>'현재 '+l+'회/초'},
   {id:'offline',nm:'야영 기술', ico:'🏕️', sub:'오프라인 효율 +10%p',    baseCost:30000,  mult:1.55, max:14,
    cur:l=>'현재 +'+(l*10)+'%p'},
@@ -550,7 +552,8 @@ function upgBossMult(){ return cap(Math.pow(1.25, upgLv('boss'))); }
 // ── 정수(환생) 상점: 영구 강화 ──
 const GEMSHOP=[
   {id:'gAll',   nm:'영웅의 유산', ico:'🌟', sub:'모든 피해 +25% / 레벨',          baseCost:1, mult:1.35, key:'gALL'},
-  {id:'gGold',  nm:'탐욕의 인장', ico:'🪙', sub:'골드 획득 +30% / 레벨',          baseCost:1, mult:1.4,  key:'gGold'},
+  // 곱연산이라 상한이 없으면 환생을 거듭할수록 배율이 끝없이 커진다
+  {id:'gGold',  nm:'탐욕의 인장', ico:'🪙', sub:'골드 획득 +30% / 레벨',          baseCost:1, mult:1.4,  key:'gGold', max:200},
   {id:'gStart', nm:'개척자',      ico:'🚩', sub:'환생 후 시작 스테이지 +3 / 레벨', baseCost:2, mult:1.6,  key:'gStart'},
   {id:'gCrit',  nm:'운명의 눈',   ico:'👁️', sub:'클릭 치명타 확률 +3% / 레벨',     baseCost:3, mult:1.6,  key:'gCrit'},
   {id:'gAuto',  nm:'영혼 분신',   ico:'👥', sub:'자동 공격 +1회/초 / 레벨',        baseCost:4, mult:1.8,  key:'gAuto'},
@@ -786,7 +789,9 @@ const HERO_PERKS={
   apex:     {nm:'정점의 빛',  type:'allDmg',   per:0.65, every:25, fmt:v=>'모든 피해 +'+Math.round(v*100)+'%'},
   finale:   {nm:'종언',        type:'allDmg',   per:5.00, every:1,  fmt:v=>'모든 피해 +'+Math.round(v*100)+'%'},
 };
-function perkSteps(have,every){ return have>0?1+Math.floor((have-1)/every):0; }
+// 특성 단계 상한 — 없으면 동료 수가 늘수록 배율의 곱이 끝없이 커진다
+const PERK_MAX_STEPS=20;
+function perkSteps(have,every){ return have>0?Math.min(PERK_MAX_STEPS,1+Math.floor((have-1)/every)):0; }
 
 // ── 도전과제: 달성 시 정수 지급(영구) ──
 // 봉인된 동료 — 환생 횟수와 최고 기록을 둘 다 충족해야 풀린다
@@ -1950,14 +1955,14 @@ function renderShop(){
     list.appendChild(info);
   }else if(activeTab==='up'){
     UPGRADES.forEach(u=>{
-      const have=upgLv(u.id), cap=upgMax(u);
-      if(have>=cap){
+      const have=upgLv(u.id), lvCap=upgMax(u);   // cap() 함수와 이름이 겹치지 않게 lvCap
+      if(have>=lvCap){
         list.appendChild(card({ ico:u.ico, nm:u.nm, sub:u.sub,
           lvl:`레벨 ${have} · ${u.cur(have)}`, cost:'MAX', costCls:'ok', onclick:()=>{} }));
         return;
       }
       let {n,sum}=resolveQty(u.baseCost,u.mult,have,S.gold);
-      n=Math.min(n,cap-have); sum=costFor(u.baseCost,u.mult,have,n);
+      n=Math.min(n,lvCap-have); sum=costFor(u.baseCost,u.mult,have,n);
       const ok=S.gold>=sum;
       const hint=affordHint(n,sum,have,S.gold,lv=>u.baseCost*Math.pow(u.mult,lv));
       list.appendChild(card({
@@ -1979,13 +1984,20 @@ function renderShop(){
   }else if(activeTab==='gem'){
     GEMSHOP.forEach(g=>{
       const have=S.gem[g.key]||0;
-      const {n,sum}=resolveQtyGem(g.baseCost,g.mult,have,S.gems);
-      const ok=S.gems>=sum;
+      const maxed=g.max&&have>=g.max;
+      let {n,sum}=resolveQtyGem(g.baseCost,g.mult,have,S.gems);
+      if(g.max&&have+n>g.max){                       // 상한을 넘겨 사지 않도록 수량을 줄인다
+        n=Math.max(0,g.max-have);
+        sum=0; for(let i=0;i<n;i++) sum+=gemCostAt(g.baseCost,g.mult,have+i);
+      }
+      const ok=!maxed&&n>0&&S.gems>=sum;
       const hint=affordHint(n,sum,have,S.gems,lv=>gemCostAt(g.baseCost,g.mult,lv));
       list.appendChild(card({
-        ico:g.ico, nm:g.nm, sub:g.sub, lvl:`레벨 ${have}`+(n>1?` → ${have+n}`:'')+(hint?' · '+hint:''),
-        cost:'💎 '+fmt(sum)+(n>1?`<div style="font-size:10px;opacity:.7">×${n}</div>`:''), costCls:'gem '+(ok?'ok':'no'),
-        onclick:()=>{ if(S.gems<sum)return; S.gems-=sum; S.gem[g.key]=have+n; updateTop();renderShop();flashSave(); }
+        ico:g.ico, nm:g.nm, sub:g.sub,
+        lvl:`레벨 ${have}`+(g.max?` / ${g.max}`:'')+(!maxed&&n>1?` → ${have+n}`:'')+(!maxed&&hint?' · '+hint:''),
+        cost: maxed?'최대':'💎 '+fmt(sum)+(n>1?`<div style="font-size:10px;opacity:.7">×${n}</div>`:''),
+        costCls: maxed?'':'gem '+(ok?'ok':'no'),
+        onclick:()=>{ if(maxed||n<1||S.gems<sum)return; S.gems-=sum; S.gem[g.key]=have+n; updateTop();renderShop();flashSave(); }
       }));
     });
     const info=document.createElement('div');
