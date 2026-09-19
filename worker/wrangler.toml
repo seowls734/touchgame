@@ -1,0 +1,10 @@
+name = "touchgame-rank"
+main = "src/worker.js"
+compatibility_date = "2024-09-01"
+
+# D1 데이터베이스 바인딩
+# database_id 는 `wrangler d1 create touchgame-rank` 실행 후 출력되는 값으로 바꿔야 한다.
+[[d1_databases]]
+binding = "DB"
+database_name = "touchgame-rank"
+database_id = "여기에-d1-생성-후-나오는-id를-넣으세요"

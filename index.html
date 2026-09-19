@@ -2003,7 +2003,7 @@ function renderShop(){
     const pct=nx?Math.max(0,Math.min(100,(rp-tr.at)/(nx.at-tr.at)*100)):100;
     head.innerHTML=
       '<div style="font-size:13px"><b style="color:'+tr.col+'">'+tr.ico+' '+tr.nm+'</b> '+
-        '<span style="font-size:11px;color:var(--dim)">· '+me+'</span>'+
+        '<span style="font-size:11px;color:var(--dim)">· '+esc(me)+'</span>'+
         '<span style="float:right;font-size:12px;color:var(--gem)">'+fmt(rp)+' RP</span></div>'+
       '<div style="height:6px;border-radius:4px;background:rgba(255,255,255,.08);margin:6px 0 4px;overflow:hidden">'+
         '<div style="height:100%;width:'+pct.toFixed(1)+'%;background:'+(nx?nx.col:tr.col)+'"></div></div>'+
@@ -2013,10 +2013,10 @@ function renderShop(){
     list.appendChild(head);
 
     // ② 온라인 연결 상태
-    const net=document.createElement('div');
-    net.style.cssText='font-size:11px;color:var(--dim);text-align:center;padding:0 0 8px';
-    net.textContent=fbStatusText();
-    list.appendChild(net);
+    const netBox=document.createElement('div');
+    netBox.style.cssText='font-size:11px;color:var(--dim);text-align:center;padding:0 0 8px';
+    netBox.textContent=netStatusText();
+    list.appendChild(netBox);
 
     // ③ 부문 선택 — 종합 / 스테이지 / DPS / 환생
     const bar=document.createElement('div');
@@ -2039,7 +2039,7 @@ function renderShop(){
     if(arr.length<=1){
       const em=document.createElement('div');
       em.style.cssText='font-size:12px;color:var(--dim);text-align:center;padding:14px 8px;line-height:1.8';
-      em.innerHTML=fb.on
+      em.innerHTML=net.on
         ? '아직 겨룰 기록이 없어요.<br>먼저 올라가 있으면 됩니다!'
         : '아직 이 브라우저에 다른 기록이 없어요.<br>계정을 더 만들거나 온라인 랭킹을 켜면 함께 집계됩니다.';
       list.appendChild(em);
@@ -2048,7 +2048,7 @@ function renderShop(){
       const isMe=e.name===me, et=tierOf(rankScore(e));
       const el=card({
         ico:medal(i),
-        nm:(isMe?'⭐ ':'')+(e.online?'🌐 ':'')+e.name+
+        nm:(isMe?'⭐ ':'')+(e.online?'🌐 ':'')+esc(e.name)+
            (e.guest?' <span style="opacity:.6;font-size:10px">(게스트)</span>':''),
         sub:'<span style="color:'+et.col+'">'+et.ico+' '+et.nm+'</span> · 🗼 St.'+(e.stage||1)+' · 💀 '+(e.prestiges||0),
         lvl:'⚔️ DPS '+fmt(e.dps||0)+' · 💰 '+fmt(e.gold||0),
@@ -2069,8 +2069,8 @@ function renderShop(){
       bad.forEach(e=>{
         const el=card({
           ico:'⚠️',
-          nm:(e.name===me?'⭐ ':'')+e.name,
-          sub:rankFlags(e).join(' · '),
+          nm:(e.name===me?'⭐ ':'')+esc(e.name),
+          sub:esc(rankFlags(e).join(' · ')),
           lvl:'🗼 St.'+(e.stage||1)+' · 💀 '+(e.prestiges||0)+' · ⚔️ '+fmt(e.dps||0),
           cost:'제외', costCls:'no',
           onclick:()=>{}
@@ -2086,7 +2086,7 @@ function renderShop(){
     info.innerHTML='🏆 <b>'+cat.nm+'</b> 부문 · 내 순위 <b style="color:var(--gem)">'+(mr?mr+'위':'-')+'</b> / '+arr.length+'명<br>'+
       '· <b>RP</b> = 스테이지 + 환생 + DPS·골드·처치(로그 환산) 합산 점수<br>'+
       '· RP가 쌓이면 '+TIERS.map(t=>t.ico).join('→')+' 순으로 티어가 올라갑니다<br>'+
-      (fb.on?'· 🌐 표시는 다른 기기에서 올라온 기록입니다<br>'
+      (net.on?'· 🌐 표시는 다른 기기에서 올라온 기록입니다<br>'
             :'· 이 브라우저의 계정 기록만 집계됩니다<br>')+
       '· 규칙상 불가능한 기록은 자동으로 순위에서 빠집니다';
     list.appendChild(info);
@@ -2250,6 +2250,9 @@ function rankScore(e){
        + Math.log10((e.gold||0)+1)*25
        + Math.log10((e.kills||0)+1)*30;
 }
+// 이름 등 바깥에서 들어온 문자열은 innerHTML에 넣기 전에 반드시 이스케이프한다
+function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
 // ── 이상치 필터 ──
 // 서버 검증이 없으므로, 게임 규칙상 불가능한 조합만 걸러낸다.
 // 목표는 "완벽한 치트 차단"이 아니라 순위표가 말이 되게 유지하는 것.
@@ -2278,7 +2281,7 @@ function rankEntries(){
   const r=loadRanks(), arr=[];
   for(const k in r){ const e=Object.assign({},r[k]); e.name=e.name||k; arr.push(e); }
   // 서버 기록을 합친다 — 내 기록은 로컬 쪽이 항상 최신이므로 서버본을 버린다
-  onlineRanks.forEach(o=>{ if(o.uid!==fb.uid) arr.push(Object.assign({},o)); });
+  onlineRanks.forEach(o=>{ if(o.id!==net.id) arr.push(Object.assign({},o)); });
   return arr;
 }
 function rankList(cat){
@@ -2307,71 +2310,96 @@ function submitScore(){
   cur.rp=Math.round(rankScore(cur));
   cur.bestTier=Math.max(prev.bestTier||0,TIERS.indexOf(after));
   r[nm]=cur; saveRanks(r);
-  fbSubmit(cur);
+  netSubmit(cur);
   // 티어가 올라가면 한 번만 알려준다
   if(prev.stage!==undefined && TIERS.indexOf(after)>TIERS.indexOf(before))
     floatNum(after.ico+' '+after.nm+' 승급!',true,after.col);
 }
 
-// ── 온라인 랭킹(Firebase) ──
-// FB_CONFIG를 채우면 켜지고, 비워 두면 예전처럼 로컬 전용으로만 돈다.
-// 실제 검증은 Firestore 보안 규칙(firestore.rules)이 맡는다 — 아래 코드는 편의일 뿐이다.
-const FB_CONFIG=null;   // 예: {apiKey:'…', authDomain:'…', projectId:'…', appId:'…'}
-const FB_SDK='https://www.gstatic.com/firebasejs/10.12.5/';
-const FB_BOARD_LIMIT=100;        // 보드에 내려받는 최대 인원
-const FB_PUSH_MS=60000;          // 서버 기록 갱신 최소 간격
+// ── 온라인 랭킹(Cloudflare Workers) ──
+// API_URL을 채우면 켜지고, 비워 두면 예전처럼 로컬 전용으로만 돈다.
+// 점수 계산과 이상치 검증은 전부 서버(worker/src/worker.js)가 다시 한다.
+const API_URL='';                // 예: 'https://touchgame-rank.내계정.workers.dev'
+const NET_LIMIT=100;             // 보드에 받아 올 최대 인원
+const NET_PUSH_MS=60000;         // 기록 전송 최소 간격
+const NET_PULL_MS=30000;         // 보드 새로고침 간격
+const NET_ID_KEY='idleDungeonNetId_v1';
 
 let onlineRanks=[];              // 서버에서 받아 온 기록
-const fb={on:false, status:'off', msg:'', uid:null, setDoc:null, ref:null, lastPush:0, lastRp:-1};
+const net={on:false, status:'off', msg:'', id:null, secret:null,
+           lastPush:0, lastPull:0, lastRp:-1, busy:false};
 
-function fbStatusText(){
-  if(!FB_CONFIG)          return '📴 로컬 전용 — 이 브라우저의 기록만 표시됩니다';
-  if(fb.status==='ready') return '🌐 온라인 랭킹 연결됨 · '+onlineRanks.length+'명 집계';
-  if(fb.status==='conn')  return '🌐 온라인 랭킹 연결 중…';
-  return '⚠️ 온라인 연결 실패 — 로컬 기록만 표시합니다'+(fb.msg?' ('+fb.msg+')':'');
+// 기록의 주인을 증명하는 값 — 이 기기에만 저장되고, 남이 내 기록을 덮어쓰지 못하게 한다.
+function netIdent(){
+  if(net.id)return net;
+  try{
+    const raw=JSON.parse(localStorage.getItem(NET_ID_KEY)||'null');
+    if(raw&&raw.id&&raw.secret){ net.id=raw.id; net.secret=raw.secret; return net; }
+  }catch(e){}
+  const rnd=n=>Array.from(crypto.getRandomValues(new Uint8Array(n)))
+                    .map(b=>b.toString(16).padStart(2,'0')).join('');
+  net.id=rnd(8); net.secret=rnd(16);
+  try{ localStorage.setItem(NET_ID_KEY,JSON.stringify({id:net.id,secret:net.secret})); }catch(e){}
+  return net;
 }
 
-async function fbInit(){
-  if(!FB_CONFIG||fb.status!=='off')return;
-  fb.status='conn';
-  try{
-    const [{initializeApp},{getAuth,signInAnonymously,onAuthStateChanged},fs]=await Promise.all([
-      import(FB_SDK+'firebase-app.js'),
-      import(FB_SDK+'firebase-auth.js'),
-      import(FB_SDK+'firebase-firestore.js'),
-    ]);
-    const app=initializeApp(FB_CONFIG), auth=getAuth(app), db=fs.getFirestore(app);
-    await signInAnonymously(auth);
-    await new Promise(res=>onAuthStateChanged(auth,u=>{ if(u){ fb.uid=u.uid; res(); } }));
+function netStatusText(){
+  if(!API_URL)             return '📴 로컬 전용 — 이 브라우저의 기록만 표시됩니다';
+  if(net.status==='ready') return '🌐 온라인 랭킹 연결됨 · '+onlineRanks.length+'명 집계';
+  if(net.status==='conn')  return '🌐 온라인 랭킹 연결 중…';
+  return '⚠️ 온라인 연결 실패 — 로컬 기록만 표시합니다'+(net.msg?' ('+net.msg+')':'');
+}
 
-    fb.setDoc=data=>fs.setDoc(fs.doc(db,'ranks',fb.uid),data);
-    // 상위 기록을 실시간으로 구독한다
-    fs.onSnapshot(
-      fs.query(fs.collection(db,'ranks'),fs.orderBy('rp','desc'),fs.limit(FB_BOARD_LIMIT)),
-      snap=>{
-        onlineRanks=snap.docs.map(d=>Object.assign({uid:d.id,online:true},d.data()));
-        fb.status='ready'; fb.on=true;
-        if(activeTab==='rank')renderShop();
-      },
-      err=>{ fb.status='fail'; fb.msg=err.code||'구독 실패'; if(activeTab==='rank')renderShop(); }
-    );
+function netInit(){
+  if(!API_URL||net.status!=='off')return;
+  netIdent();
+  net.status='conn';
+  netPull();
+  // 랭킹 탭을 보고 있을 때만 주기적으로 새로 받아 온다
+  setInterval(()=>{ if(activeTab==='rank')netPull(); },NET_PULL_MS);
+}
+
+async function netPull(){
+  if(!API_URL||net.busy)return;
+  if(Date.now()-net.lastPull<NET_PULL_MS/2)return;
+  net.busy=true; net.lastPull=Date.now();
+  try{
+    const res=await fetch(API_URL+'/board?limit='+NET_LIMIT,{cache:'no-store'});
+    if(!res.ok)throw new Error('HTTP '+res.status);
+    const data=await res.json();
+    onlineRanks=(data.board||[]).map(e=>Object.assign({online:true},e));
+    net.status='ready'; net.on=true; net.msg='';
   }catch(e){
-    fb.status='fail'; fb.msg=(e&&(e.code||e.message))||'연결 실패';
+    net.status='fail'; net.msg=(e&&e.message)||'불러오기 실패';
+  }finally{
+    net.busy=false;
     if(activeTab==='rank')renderShop();
   }
 }
 
-function fbSubmit(cur){
-  if(!fb.setDoc||!fb.uid)return;
-  // 규칙상 불가능한 기록은 서버에 올리지 않는다(어차피 규칙에서 거부된다)
+async function netSubmit(cur){
+  if(!API_URL||!net.id)return;
+  // 서버가 어차피 거부할 기록은 보내지 않는다
   if(!rankValid(cur))return;
   const now=Date.now();
-  if(cur.rp<=fb.lastRp)return;                 // 기록이 나아졌을 때만
-  if(now-fb.lastPush<FB_PUSH_MS)return;        // 쓰기 횟수를 아낀다
-  fb.lastPush=now; fb.lastRp=cur.rp;
-  fb.setDoc({name:cur.name, stage:cur.stage, prestiges:cur.prestiges,
-             dps:cur.dps, gold:cur.gold, kills:cur.kills, rp:cur.rp, at:now})
-    .catch(e=>{ fb.msg=(e&&e.code)||'기록 거부됨'; fb.lastRp=-1; });   // 실패하면 다음 기회에 다시 시도
+  if(cur.rp<=net.lastRp)return;                // 기록이 나아졌을 때만
+  if(now-net.lastPush<NET_PUSH_MS)return;      // 요청 수를 아낀다
+  net.lastPush=now; net.lastRp=cur.rp;
+  try{
+    const res=await fetch(API_URL+'/submit',{
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({id:net.id, secret:net.secret, name:cur.name,
+        stage:cur.stage, prestiges:cur.prestiges, dps:cur.dps, gold:cur.gold, kills:cur.kills})
+    });
+    if(!res.ok){
+      const j=await res.json().catch(()=>({}));
+      throw new Error(j.error||('HTTP '+res.status));
+    }
+    net.lastPull=0; netPull();                 // 갱신된 순위를 바로 반영
+  }catch(e){
+    net.msg=(e&&e.message)||'기록 거부됨';
+    net.lastRp=-1;                             // 실패하면 다음 기회에 다시 시도
+  }
 }
 
 // ── 저장 / 불러오기 ──
@@ -2778,7 +2806,7 @@ function startGame(){
 
   load();
   gameReady=true;
-  fbInit();                      // 온라인 랭킹(설정돼 있을 때만)
+  netInit();                     // 온라인 랭킹(설정돼 있을 때만)
   lastTick=Date.now();
   spawnMob();
   renderSkills();
