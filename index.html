@@ -2036,13 +2036,20 @@ function renderShop(){
     const cat=RANK_CATS.find(x=>x.id===rankCat)||RANK_CATS[0];
     const arr=rankList(rankCat);
     const medal=i=>i===0?'🥇':(i===1?'🥈':(i===2?'🥉':'#'+(i+1)));
+    if(arr.length<=1){
+      const em=document.createElement('div');
+      em.style.cssText='font-size:12px;color:var(--dim);text-align:center;padding:14px 8px;line-height:1.8';
+      em.innerHTML=fb.on
+        ? '아직 겨룰 기록이 없어요.<br>먼저 올라가 있으면 됩니다!'
+        : '아직 이 브라우저에 다른 기록이 없어요.<br>계정을 더 만들거나 온라인 랭킹을 켜면 함께 집계됩니다.';
+      list.appendChild(em);
+    }
     arr.forEach((e,i)=>{
       const isMe=e.name===me, et=tierOf(rankScore(e));
       const el=card({
         ico:medal(i),
         nm:(isMe?'⭐ ':'')+(e.online?'🌐 ':'')+e.name+
-           (e.rival?' <span style="opacity:.6;font-size:10px">(라이벌)</span>':
-            (e.guest?' <span style="opacity:.6;font-size:10px">(게스트)</span>':'')),
+           (e.guest?' <span style="opacity:.6;font-size:10px">(게스트)</span>':''),
         sub:'<span style="color:'+et.col+'">'+et.ico+' '+et.nm+'</span> · 🗼 St.'+(e.stage||1)+' · 💀 '+(e.prestiges||0),
         lvl:'⚔️ DPS '+fmt(e.dps||0)+' · 💰 '+fmt(e.gold||0),
         cost:cat.lab(e), costCls:isMe?'ok':'',
@@ -2080,7 +2087,7 @@ function renderShop(){
       '· <b>RP</b> = 스테이지 + 환생 + DPS·골드·처치(로그 환산) 합산 점수<br>'+
       '· RP가 쌓이면 '+TIERS.map(t=>t.ico).join('→')+' 순으로 티어가 올라갑니다<br>'+
       (fb.on?'· 🌐 표시는 다른 기기에서 올라온 기록입니다<br>'
-            :'· 이 브라우저의 계정들과 고정 라이벌이 함께 집계됩니다<br>')+
+            :'· 이 브라우저의 계정 기록만 집계됩니다<br>')+
       '· 규칙상 불가능한 기록은 자동으로 순위에서 빠집니다';
     list.appendChild(info);
   }else{ // ach — 도전과제
@@ -2199,7 +2206,7 @@ function showEnding(){
 }
 
 // ── 랭킹(로컬) ──
-// 서버가 없으므로 이 브라우저의 계정 + 고정 라이벌(NPC) 기록과 겨루는 기록판이다.
+// 실제 기록만 집계한다 — 로컬(이 브라우저의 계정들) + 온라인이 켜져 있으면 서버 기록.
 // v2: 단일 점수(RP) + 티어 승급 + 부문별 순위로 개편.
 const RANK_KEY_V1='idleDungeonRanks_v1';
 
@@ -2225,17 +2232,6 @@ const RANK_CATS=[
 ];
 let rankCat='rp';
 
-// 고정 라이벌 — 보드가 비어 보이지 않게, 그리고 승급 목표가 되도록 티어별로 배치한다.
-const RIVALS=[
-  {name:'초심자 티모',   stage:14,  prestiges:0,  dps:4.2e2,  gold:9e3},
-  {name:'수련생 하나',   stage:38,  prestiges:2,  dps:8.5e3,  gold:4e5},
-  {name:'모험가 준',     stage:76,  prestiges:6,  dps:2.1e5,  gold:9e6},
-  {name:'정예 세라',     stage:140, prestiges:14, dps:7.4e6,  gold:3e8},
-  {name:'수호자 라온',   stage:230, prestiges:27, dps:3.3e8,  gold:1.2e10},
-  {name:'심연의 카일',   stage:360, prestiges:45, dps:9.6e10, gold:5e12},
-  {name:'무한의 오메가', stage:500, prestiges:80, dps:4.1e14, gold:2e16}
-];
-
 function loadRanks(){
   try{ const d=JSON.parse(localStorage.getItem(RANK_KEY)||'null'); if(d&&typeof d==='object')return d; }catch(e){}
   // v1 기록이 있으면 그대로 물려받는다
@@ -2259,7 +2255,6 @@ function rankScore(e){
 // 목표는 "완벽한 치트 차단"이 아니라 순위표가 말이 되게 유지하는 것.
 const SANITY_DPS_LEAD=25;   // 현재 스테이지보다 이만큼 앞선 보스를 즉사시킬 정도면 비정상
 function rankFlags(e){
-  if(e.rival)return [];
   const f=[], st=Math.max(1,e.stage||1), pr=e.prestiges||0;
   // ① DPS: 최고 스테이지에 비해 터무니없이 높다
   if((e.dps||0) > mobMaxHp(Math.min(FINAL_STAGE,st+SANITY_DPS_LEAD),true))
@@ -2284,9 +2279,6 @@ function rankEntries(){
   for(const k in r){ const e=Object.assign({},r[k]); e.name=e.name||k; arr.push(e); }
   // 서버 기록을 합친다 — 내 기록은 로컬 쪽이 항상 최신이므로 서버본을 버린다
   onlineRanks.forEach(o=>{ if(o.uid!==fb.uid) arr.push(Object.assign({},o)); });
-  const have={}; arr.forEach(e=>have[e.name]=1);
-  // 라이벌은 온라인 보드가 살아 있으면 자리를 비켜 준다
-  if(!fb.on) RIVALS.forEach(b=>{ if(!have[b.name]) arr.push(Object.assign({rival:true},b)); });
   return arr;
 }
 function rankList(cat){
