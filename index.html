@@ -543,9 +543,9 @@ function masteryLevels(){
   return t;
 }
 function masteryRank(){ return Math.floor(masteryLevels()/MASTERY_STEP); }
-function masteryMult(){ return Math.pow(1+MASTERY_PER, masteryRank()); }
+function masteryMult(){ return cap(Math.pow(1+MASTERY_PER, masteryRank())); }
 // 보스 사냥꾼
-function upgBossMult(){ return Math.pow(1.25, upgLv('boss')); }
+function upgBossMult(){ return cap(Math.pow(1.25, upgLv('boss'))); }
 
 // ── 정수(환생) 상점: 영구 강화 ──
 const GEMSHOP=[
@@ -906,6 +906,21 @@ const SUF=(()=>{
   a.push('Ce');                                                  // 1e303
   return a;
 })();
+// ── 수치 상한 ──
+// 자바스크립트 수는 약 1.8e308을 넘으면 Infinity가 되고, 그 뒤로는 계산이 전부
+// ∞/NaN으로 망가진다. 저장할 때도 JSON이 Infinity를 null로 바꿔 세이브가 깨진다.
+// 그래서 게임에 쓰이는 모든 수치를 안전한 상한 아래에 붙잡아 둔다.
+const NUM_CAP=1e300;
+function cap(v){
+  const n=Number(v);
+  if(Number.isNaN(n))return 0;         // NaN은 복구 불가 — 0으로 되돌린다
+  if(n===Infinity)return NUM_CAP;
+  if(n===-Infinity)return 0;
+  return n>NUM_CAP?NUM_CAP:n;
+}
+// 배율 묶음(유물·장비·연구 등)의 각 항목을 상한으로 붙잡는다
+function capFx(o){ for(const k in o) o[k]=cap(o[k]); return o; }
+
 function fmt(n){
   if(!isFinite(n))return '∞';
   if(n<1000)return (Math.floor(n*10)/10).toString().replace(/\.0$/,'');
@@ -937,7 +952,7 @@ function relicFx(){
       case 'offline': r.offline+=v; break;
     }
   }
-  return r;
+  return capFx(r);
 }
 // ── 대장간 장비 효과 ──
 function equipFx(){
@@ -957,7 +972,7 @@ function equipFx(){
       case 'bossDmg': fx.bossDmg*=1+v;break;   // 망토
     }
   }
-  return fx;
+  return capFx(fx);
 }
 function equipStatVal(sl){ const e=S.equip&&S.equip[sl.id]; if(!e||!e.lv)return 0; return sl.per*e.lv*RARITIES[e.rar||0].mult*(e.cur?CURSE_BOOST:1); }
 // ── 연구소 효과(완료된 연구의 영구 보너스 합산) ──
@@ -975,10 +990,10 @@ function researchFx(){
       case 'gemFind':fx.gem+=r.val;    break;
     }
   }
-  return fx;
+  return capFx(fx);
 }
 // 순수 스테이지 골드 기준값(각종 배수 제외) — 대장간/뽑기 비용 산정용
-function pureGold(st){ return 6*Math.pow(1.24,Math.max(0,st-1)); }
+function pureGold(st){ return cap(6*Math.pow(1.24,Math.max(0,st-1))); }
 
 // 액티브 스킬 버프 배율
 function skillDmgMult(){ return (skillState.berserk&&skillState.berserk.buff>0)?3:1; }
@@ -997,7 +1012,7 @@ function clickPower(){
   const base=Math.ceil(1*Math.pow(1.75,upgLv('click')))*gemAllMult()*heroFx().click*relicFx().click
     *eq.click*eq.allDmg*rs.click*rs.allDmg*skillDmgMult()*eventDmgMult()*masteryMult();
   // 폭풍 연타: 클릭 한 번이 동료 DPS의 일부를 그대로 얹는다 — 후반에도 클릭이 죽지 않게
-  return base + totalDps()*0.25*upgLv('surge');
+  return cap(cap(base) + totalDps()*0.25*upgLv('surge'));
 }
 function totalDps(){
   let d=0;
@@ -1011,9 +1026,9 @@ function totalDps(){
   { const rs=researchFx(); d*=rs.dps*rs.allDmg; } // 연구소
   d*=skillDmgMult();             // 광폭화
   d*=eventDmgMult();             // 이벤트 버프
-  return d;
+  return cap(d);
 }
-function goldMult(){ return Math.pow(1.25,upgLv('gold'))*Math.pow(1.30,S.gem.gGold||0)*relicFx().gold*equipFx().gold*researchFx().gold*skillGoldMult()*eventGoldMult(); }
+function goldMult(){ return cap(Math.pow(1.25,upgLv('gold'))*Math.pow(1.30,S.gem.gGold||0)*relicFx().gold*equipFx().gold*researchFx().gold*skillGoldMult()*eventGoldMult()); }
 // 자동 공격 횟수/초 (자동 검술 + 영혼 분신 + 질풍의 주자 + 이벤트 분신)
 function autoRate(){ return (S.upg.auto||0)+(S.gem.gAuto||0)+heroFx().auto+eventAutoAdd(); }
 // 치명타 확률/배율 (강화·정수·유물·동료 합산)
@@ -1025,7 +1040,7 @@ function bossTimeBonus(){ return heroFx().bossTime+relicFx().bossTime; }
 function offlineEff(){ return Math.min(2.0, 0.6+0.10*(S.upg.offline||0)+0.15*(S.gem.gOffline||0)+relicFx().offline+researchFx().offline); }
 // 정수 드롭 추가 확률 (동료+유물)
 function gemFindChance(){ return Math.min(0.95, heroFx().gem+relicFx().gem+researchFx().gem+eventGemAdd()); }
-function gemAllMult(){ return 1+0.25*(S.gem.gALL||0); }
+function gemAllMult(){ return cap(1+0.25*(S.gem.gALL||0)); }
 
 // 동료 특수 능력 합산 → 각종 보정치
 function heroFx(){
@@ -1049,7 +1064,7 @@ function heroFx(){
   }
   fx.crit=Math.min(fx.crit,0.6);   // 치명타 확률 상한
   fx.gem=Math.min(fx.gem,0.75);    // 정수 획득 확률 상한
-  return fx;
+  return capFx(fx);
 }
 
 // 직전 보스 스테이지(없으면 0)
@@ -1065,7 +1080,7 @@ function mobMaxHp(stage,boss){
       hp=Math.max(hp,floor);
     }
   }
-  return Math.ceil(hp);
+  return cap(Math.ceil(hp));
 }
 function goldReward(stage,boss){
   let g=6*Math.pow(1.24,stage-1);   // 스테이지가 오를수록 골드 급증
@@ -1078,7 +1093,7 @@ function goldReward(stage,boss){
       g=Math.max(g,floor);
     }
   }
-  return Math.ceil(g*goldMult()*heroFx().gold);
+  return cap(Math.ceil(g*goldMult()*heroFx().gold));
 }
 function isBossStage(st){return st%10===0;}
 // 일반 스테이지는 4킬마다 전진 — 행군 훈련으로 최대 1킬까지 줄일 수 있다
@@ -1091,7 +1106,7 @@ function gemsFromPrestige(){
   if(S.maxStage<prestigeReqStage())return 0;
   return gemsAtStage(S.maxStage);
 }
-function gemsAtStage(st){ return Math.floor(Math.pow(st/10,1.7)); }
+function gemsAtStage(st){ return Math.floor(cap(Math.pow(st/10,1.7))); }
 // 보상이 1 늘어나려면 어느 스테이지까지 더 가야 하는지
 function nextGemStage(){
   const now=gemsAtStage(S.maxStage);
@@ -1146,6 +1161,7 @@ function renderHp(){
 function dealDamage(amt,fromClick,crit){
   if(mob.hp<=0)return;
   if(mob.boss)amt*=heroFx().bossDmg*equipFx().bossDmg*upgBossMult(); // 용기사·망토·보스 사냥꾼
+  amt=cap(amt);                     // ∞ 피해가 들어오면 체력이 NaN이 되어 처치 판정이 깨진다
   mob.hp-=amt;
   if(fromClick)floatNum(amt,!!crit,crit?'#ff5a78':'#ffd86b');
   if(mob.hp<=0)onKill();
@@ -1452,6 +1468,8 @@ function tick(){
   const now=Date.now(); let dt=(now-lastTick)/1000; lastTick=now;
   if(!gameReady)return;
   if(dt>1)dt=1;
+  // 보유 재화는 매 틱마다 상한으로 붙잡는다 — 한 곳만 막아도 모든 획득 경로가 덮인다
+  S.gold=cap(S.gold); S.gems=cap(S.gems);
   // 액티브 스킬 쿨다운/버프 진행
   for(const id in skillState){ const st=skillState[id];
     if(st.cd>0)st.cd=Math.max(0,st.cd-dt);
@@ -1486,13 +1504,18 @@ $('buyMaxBtn').onclick=()=>{
 };
 function costFor(base,mult,have,qty){
   let c=0,b=base*Math.pow(mult,have);
-  for(let i=0;i<qty;i++){c+=b;b*=mult;}
-  return c;
+  for(let i=0;i<qty;i++){
+    if(!isFinite(b))return NUM_CAP;   // 비용이 한계를 넘으면 살 수 없다
+    c+=b; b*=mult;
+  }
+  return cap(c);
 }
 function maxAfford(base,mult,have,gold){
   let n=0,b=base*Math.pow(mult,have),sum=0;
-  while(sum+b<=gold&&n<100000){sum+=b;b*=mult;n++;}
-  return {n,sum};
+  const g=cap(gold);
+  // b가 한계를 넘으면 더는 살 수 없으므로 반복을 멈춘다(무한 루프 방지)
+  while(isFinite(b)&&sum+b<=g&&n<100000){sum+=b;b*=mult;n++;}
+  return {n,sum:cap(sum)};
 }
 function resolveQty(base,mult,have,currency){
   if(buyMode!=='max')return {n:buyMode,sum:costFor(base,mult,have,buyMode)};
@@ -1500,7 +1523,7 @@ function resolveQty(base,mult,have,currency){
   return r.n<1?{n:1,sum:costFor(base,mult,have,1)}:r;
 }
 // 정수 상점은 레벨마다 올림(ceil) 비용이라 따로 계산한다
-function gemCostAt(base,mult,lv){ return Math.ceil(base*Math.pow(mult,lv)); }
+function gemCostAt(base,mult,lv){ return cap(Math.ceil(base*Math.pow(mult,lv))); }
 function resolveQtyGem(base,mult,have,gems){
   if(buyMode!=='max'){
     let sum=0; for(let i=0;i<buyMode;i++) sum+=gemCostAt(base,mult,have+i);
@@ -2404,7 +2427,10 @@ async function netSubmit(cur){
 
 // ── 저장 / 불러오기 ──
 let saveFlash=0;
-function save(){ S.lastSeen=Date.now(); try{localStorage.setItem(SAVE_KEY,JSON.stringify(S));}catch(e){} submitScore(); }
+// JSON은 Infinity/NaN을 null로 바꿔 버린다 — 그대로 두면 다음 접속에 세이브가 깨지므로
+// 저장 시점에 상한 값으로 바꿔 기록한다.
+function saveReplacer(k,v){ return typeof v==='number'?cap(v):v; }
+function save(){ S.lastSeen=Date.now(); try{localStorage.setItem(SAVE_KEY,JSON.stringify(S,saveReplacer));}catch(e){} submitScore(); }
 function flashSave(){save();$('saveStat').textContent='💾 저장됨';saveFlash=Date.now();}
 setInterval(()=>{ if(!gameReady)return; save(); if(Date.now()-saveFlash>1500)$('saveStat').textContent='💾 자동 저장 중 · 최고 스테이지 '+S.maxStage;},3000);
 window.addEventListener('beforeunload',()=>{ if(gameReady)save(); });
@@ -2432,7 +2458,23 @@ function load(){
   }else S=defaultState();
   S.frontier=Math.max(S.frontier||1,S.maxStage||1,S.stage||1);
   S.bestStage=Math.max(S.bestStage||1,S.maxStage||1);
+  sanitizeState(S);
 }
+
+// 예전 세이브에 남아 있는 ∞/NaN/null 수치를 정상 범위로 되돌린다.
+// (상한을 넣기 전에 저장된 파일은 JSON에서 null이 되어 있을 수 있다)
+function sanitizeState(o,depth){
+  depth=depth||0; if(depth>6||!o||typeof o!=='object')return o;
+  for(const k in o){
+    const v=o[k];
+    if(typeof v==='number'){ const c=cap(v); if(c!==v)o[k]=c; }
+    else if(v===null&&NUMERIC_KEYS.indexOf(k)>=0)o[k]=0;   // 저장 중 깨진 수치
+    else if(v&&typeof v==='object')sanitizeState(v,depth+1);
+  }
+  return o;
+}
+const NUMERIC_KEYS=['gold','gems','stage','maxStage','frontier','bestStage',
+                    'totalKills','prestiges','killsThisStage','expedDone','rouletteSpins','lv','rar'];
 
 // ── 오프라인 보상 + 일일 출석 보상 ──
 function dayKey(){ const n=new Date(); return n.getFullYear()+'-'+(n.getMonth()+1)+'-'+n.getDate(); }
@@ -2443,7 +2485,7 @@ function welcomeBack(){
   const d=totalDps();
   if(dt>=60 && d>0){
     const gph=goldReward(S.stage,false)/mobMaxHp(S.stage,false);
-    const earn=Math.floor(d*dt*gph*offlineEff()); // 효율(기본 60% + 강화/정수/유물)
+    const earn=Math.floor(cap(d*dt*gph*offlineEff())); // 효율(기본 60% + 강화/정수/유물)
     if(earn>0){
       const kills=Math.floor(d*dt*offlineEff()/Math.max(1,mobMaxHp(S.stage,false)));
       S.gold+=earn;
