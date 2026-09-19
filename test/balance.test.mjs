@@ -52,9 +52,24 @@ for(const gs of g('GEMSHOP'))
 const steps=g('perkSteps');
 ok('동료 특성 단계 상한', steps(1e9,10)<=g('PERK_MAX_STEPS'), `1e9마리 보유 시 ${steps(1e9,10)}단계`);
 
-// 최종 보스를 잡을 여력은 남아 있어야 한다
-const need=g('mobMaxHp')(g('FINAL_STAGE'),true);
-ok('최종 보스 체력이 안전 범위', need<1e120, `1e${Math.round(Math.log10(need))}`);
+// 스테이지에는 끝이 없다 — 아주 깊은 곳까지 가도 체력·보상이 한계를 넘으면 안 된다
+const mobMaxHp=g('mobMaxHp'), goldReward=g('goldReward'), SOFT=g('STAGE_SOFT');
+ok('스테이지 소프트 캡 지점의 체력이 안전 범위', mobMaxHp(SOFT,true)<1e120,
+   `St.${SOFT} → 1e${Math.round(Math.log10(mobMaxHp(SOFT,true)))}`);
+for(const st of [SOFT*10, SOFT*1000, 1e6, 1e9]){
+  const hp=mobMaxHp(st,true), gold=goldReward(st,true);
+  ok(`St.${st.toExponential?st.toExponential(0):st} 체력이 유한하고 한계 이하`,
+     Number.isFinite(hp)&&hp<1e300, `1e${Math.round(Math.log10(hp))}`);
+  ok(`St.${st.toExponential?st.toExponential(0):st} 골드가 유한하고 한계 이하`,
+     Number.isFinite(gold)&&gold<1e300, `1e${Math.round(Math.log10(gold))}`);
+}
+// 소프트 캡 이후에도 난이도는 계속 올라야 한다(정체되면 진행의 의미가 없다)
+ok('소프트 캡 이후 난이도 상승 지속', mobMaxHp(SOFT+1000,true)>mobMaxHp(SOFT+100,true),
+   `+100 대비 +1000에서 ×${(mobMaxHp(SOFT+1000,true)/mobMaxHp(SOFT+100,true)).toFixed(1)}`);
+// 체력 대비 보상 비율이 유지돼야 진행이 막히지 않는다
+const r1=goldReward(SOFT,false)/mobMaxHp(SOFT,false), r2=goldReward(SOFT+5000,false)/mobMaxHp(SOFT+5000,false);
+ok('소프트 캡 이후 보상/난이도 비율 유지', Math.abs(r2/r1-1)<0.01,
+   `비율 변화 ${((r2/r1-1)*100).toFixed(2)}%`);
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail?1:0);

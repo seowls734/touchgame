@@ -901,7 +901,12 @@ const ACHIEVEMENTS=[
   {id:'p5',  nm:'윤회의 길',     desc:'환생 5회 달성',  gem:12, chk:s=>(s.prestiges||0)>=5},
   {id:'p15', nm:'영원의 순례자', desc:'환생 15회 달성', gem:40, chk:s=>(s.prestiges||0)>=15},
   {id:'p30', nm:'무한의 윤회자', desc:'환생 30회 달성', gem:90, chk:s=>(s.prestiges||0)>=30},
-  {id:'s500',nm:'무한의 끝',     desc:'스테이지 500 도달', gem:200,chk:s=>s.bestStage>=500},
+  // 스테이지에는 끝이 없으므로 더 깊은 목표를 이어 둔다
+  {id:'s500',nm:'심연 돌파',     desc:'스테이지 500 도달',   gem:200,  chk:s=>s.bestStage>=500},
+  {id:'s1k', nm:'깊이의 순례자', desc:'스테이지 1,000 도달', gem:600,  chk:s=>s.bestStage>=1000},
+  {id:'s2k5',nm:'나락의 주인',   desc:'스테이지 2,500 도달', gem:2000, chk:s=>s.bestStage>=2500},
+  {id:'s5k', nm:'끝없는 자',     desc:'스테이지 5,000 도달', gem:6000, chk:s=>s.bestStage>=5000},
+  {id:'s10k',nm:'측량 불가',     desc:'스테이지 10,000 도달',gem:20000,chk:s=>s.bestStage>=10000},
   {id:'g1m', nm:'백만장자',      desc:'골드 1M 보유',   gem:5,  chk:s=>s.gold>=1e6},
   {id:'g1b', nm:'억만장자',      desc:'골드 1B 보유',   gem:15, chk:s=>s.gold>=1e9},
   {id:'g1t', nm:'대부호',        desc:'골드 1T 보유',   gem:45, chk:s=>s.gold>=1e12},
@@ -940,7 +945,16 @@ function defaultState(){
     endingSeen:false, tutorialDone:false, omegaSeen:false,
   };
 }
-const FINAL_STAGE=500;
+// 스테이지에는 끝이 없다. 다만 난이도·보상이 지수로만 계속 오르면 1578 스테이지쯤에서
+// 수의 한계를 넘어 게임이 깨지므로, STAGE_SOFT 이후로는 다항식으로 완만하게 오른다.
+// 체력과 골드에 같은 곡선을 써서 둘의 비율(체감 난이도)은 그대로 유지한다.
+const STAGE_SOFT=500, STAGE_POST=0.02, STAGE_POST_POW=2;
+function stagePostFactor(stage){
+  const over=Math.max(0,stage-STAGE_SOFT);
+  return over>0?Math.pow(1+STAGE_POST*over,STAGE_POST_POW):1;
+}
+// 지수 구간은 STAGE_SOFT 에서 멈추고, 그 뒤는 위 다항식이 이어받는다
+function stageExp(stage,base){ return Math.pow(base,Math.min(stage,STAGE_SOFT)-1); }
 
 // ── 숫자 포맷 ──
 // ── 숫자 단위 ──
@@ -1118,30 +1132,30 @@ function heroFx(){
 // 직전 보스 스테이지(없으면 0)
 function prevBossStage(stage){ return Math.floor(stage/10)*10; }
 function mobMaxHp(stage,boss){
-  let hp=10*Math.pow(1.55,stage-1);
+  let hp=10*stageExp(stage,1.55);
   if(boss)hp*=10;
   else if(!isBossStage(stage)){
     // 보스를 잡은 뒤 나오는 모든 애드는 직전 보스보다 단단하고, 진행할수록 더 강해진다
-    const pb=prevBossStage(stage);
+    const pb=Math.min(prevBossStage(stage),STAGE_SOFT);
     if(pb>=10){
-      const floor=10*Math.pow(1.55,pb-1)*10*1.1*Math.pow(1.55,stage-pb-1);
+      const floor=10*Math.pow(1.55,pb-1)*10*1.1*Math.pow(1.55,Math.min(stage,STAGE_SOFT)-pb-1);
       hp=Math.max(hp,floor);
     }
   }
-  return cap(Math.ceil(hp));
+  return cap(Math.ceil(hp*stagePostFactor(stage)));
 }
 function goldReward(stage,boss){
-  let g=6*Math.pow(1.24,stage-1);   // 스테이지가 오를수록 골드 급증
+  let g=6*stageExp(stage,1.24);     // 스테이지가 오를수록 골드 급증
   if(boss)g*=35;                    // 보스는 훨씬 더 많이
   else if(!isBossStage(stage)){
     // 보스를 잡은 뒤 나오는 모든 애드는 직전 보스보다 짭짤하고, 진행할수록 더 많이 준다
-    const pb=prevBossStage(stage);
+    const pb=Math.min(prevBossStage(stage),STAGE_SOFT);
     if(pb>=10){
-      const floor=6*Math.pow(1.24,pb-1)*35*1.6*Math.pow(1.24,stage-pb-1);
+      const floor=6*Math.pow(1.24,pb-1)*35*1.6*Math.pow(1.24,Math.min(stage,STAGE_SOFT)-pb-1);
       g=Math.max(g,floor);
     }
   }
-  return cap(Math.ceil(g*goldMult()*heroFx().gold));
+  return cap(Math.ceil(g*stagePostFactor(stage)*goldMult()*heroFx().gold));
 }
 function isBossStage(st){return st%10===0;}
 // 일반 스테이지는 4킬마다 전진 — 행군 훈련으로 최대 1킬까지 줄일 수 있다
@@ -1243,7 +1257,7 @@ function onKill(){
         if(!S.relics)S.relics={}; S.relics[rc.id]=(S.relics[rc.id]||0)+1;
         floatNum(rc.ico+' '+rc.nm+' Lv.'+S.relics[rc.id]+'!',true,'#ffd86b');
       }
-      if(S.stage>=FINAL_STAGE&&!S.endingSeen){ S.endingSeen=true; setTimeout(showEnding,300); }
+      if(S.stage>=STAGE_SOFT&&!S.endingSeen){ S.endingSeen=true; setTimeout(showEnding,300); }
     }
     // 대천사+정수의 원석: 추가 정수 확률
     const gf=gemFindChance();
@@ -2253,16 +2267,15 @@ function openModal(title,body,btns){
   $('modalBg').classList.add('show');
 }
 function closeModal(){$('modalBg').classList.remove('show');}
-// ── 엔딩: 스테이지 500(무한의 끝) 보스 격파 시 1회 출력 ──
+// ── 이정표: 스테이지 500 돌파 시 1회 출력 (끝이 아니라 통과점이다) ──
 function showEnding(){
-  openModal('👑 THE END — 무한의 끝',
+  openModal('👑 심연 돌파',
     `수백의 스테이지, 수천 번의 환생, 셀 수 없는 검격 끝에<br>`+
-    `당신은 마침내 <b style="color:var(--gold)">스테이지 ${FINAL_STAGE}</b>의 주인을 무너뜨렸습니다.<br><br>`+
-    `던전의 가장 깊은 곳에서 침묵이 흐릅니다.<br>`+
-    `더 이상 오를 곳이 없어 보였지만... 던전은 끝나지 않습니다.<br>`+
-    `당신의 전설은 계속됩니다. 원한다면 이대로 계속 나아가세요.<br><br>`+
-    `<span class="big">🏆 방치의 던전 — CLEAR 🏆</span>`,
-    [{t:'계속 모험하기',cls:'',fn:closeModal}]);
+    `당신은 <b style="color:var(--gold)">스테이지 ${STAGE_SOFT}</b>의 주인을 무너뜨렸습니다.<br><br>`+
+    `여기서부터 던전은 깊이를 재는 법을 잃습니다.<br>`+
+    `끝은 없습니다 — 스테이지는 당신이 멈출 때까지 이어집니다.<br><br>`+
+    `<span class="big">🏆 심연 너머로 🏆</span>`,
+    [{t:'계속 내려가기',cls:'',fn:closeModal}]);
 }
 
 // ── 랭킹(로컬) ──
