@@ -391,7 +391,7 @@ const LEGACY_SAVE_KEY='idleDungeonSave_v1';   // 계정 기능 이전의 세이�
 let SAVE_KEY=LEGACY_SAVE_KEY;                 // 로그인한 계정에 따라 바뀐다
 const ACCOUNTS_KEY='idleDungeonAccounts_v1';
 const SESSION_KEY='idleDungeonSession_v1';
-const RANK_KEY='idleDungeonRanks_v1';
+const RANK_KEY='idleDungeonRanks_v2';
 const TUT_SEEN_KEY='idleDungeonTutorialSeen_v1';  // 이 기기에서 튜토리얼을 한 번이라도 봤는지
 let gameReady=false;                          // 로그인 전에는 게임 루프를 돌리지 않는다
 const OFFLINE_CAP_H=8;            // 오프라인 보상 최대 8시간
@@ -1994,33 +1994,65 @@ function renderShop(){
     list.appendChild(info);
   }else if(activeTab==='rank'){ // 🏆 랭킹
     submitScore();
-    const arr=rankList(), me=rankName();
+    const me=rankName(), mine=myEntry()||{}, rp=Math.round(rankScore(mine));
+    const tr=tierOf(rp), nx=nextTier(rp);
+
+    // ① 내 티어 카드 — 현재 등급과 다음 승급까지의 진행도
+    const head=document.createElement('div');
+    head.style.cssText='background:rgba(255,255,255,.04);border:1px solid '+tr.col+'55;border-radius:10px;padding:10px 12px;margin:2px 0 8px;line-height:1.7';
+    const pct=nx?Math.max(0,Math.min(100,(rp-tr.at)/(nx.at-tr.at)*100)):100;
+    head.innerHTML=
+      '<div style="font-size:13px"><b style="color:'+tr.col+'">'+tr.ico+' '+tr.nm+'</b> '+
+        '<span style="font-size:11px;color:var(--dim)">· '+me+'</span>'+
+        '<span style="float:right;font-size:12px;color:var(--gem)">'+fmt(rp)+' RP</span></div>'+
+      '<div style="height:6px;border-radius:4px;background:rgba(255,255,255,.08);margin:6px 0 4px;overflow:hidden">'+
+        '<div style="height:100%;width:'+pct.toFixed(1)+'%;background:'+(nx?nx.col:tr.col)+'"></div></div>'+
+      '<div style="font-size:11px;color:var(--dim)">'+
+        (nx?('다음 '+nx.ico+' '+nx.nm+'까지 <b>'+fmt(Math.max(0,Math.ceil(nx.at-rp)))+' RP</b>')
+           :'최고 티어에 도달했습니다 🎉')+'</div>';
+    list.appendChild(head);
+
+    // ② 부문 선택 — 종합 / 스테이지 / DPS / 환생
+    const bar=document.createElement('div');
+    bar.style.cssText='display:flex;gap:4px;margin-bottom:8px;flex-wrap:wrap';
+    RANK_CATS.forEach(c=>{
+      const b=document.createElement('div');
+      const on=c.id===rankCat;
+      b.textContent=c.nm;
+      b.style.cssText='flex:1;min-width:64px;text-align:center;font-size:11px;padding:6px 4px;border-radius:8px;cursor:pointer;'+
+        (on?'background:var(--gem);color:#10131c;font-weight:700':'background:rgba(255,255,255,.06);color:var(--dim)');
+      b.onclick=()=>{ rankCat=c.id; renderShop(); };
+      bar.appendChild(b);
+    });
+    list.appendChild(bar);
+
+    // ③ 순위표
+    const cat=RANK_CATS.find(x=>x.id===rankCat)||RANK_CATS[0];
+    const arr=rankList(rankCat);
     const medal=i=>i===0?'🥇':(i===1?'🥈':(i===2?'🥉':'#'+(i+1)));
-    if(!arr.length){
-      const em=document.createElement('div');
-      em.style.cssText='font-size:12px;color:var(--dim);text-align:center;padding:20px;line-height:1.8';
-      em.innerHTML='아직 기록이 없어요.<br>조금만 더 모험해 보세요!';
-      list.appendChild(em);
-    }
     arr.forEach((e,i)=>{
-      const mine=e.name===me;
+      const isMe=e.name===me, et=tierOf(rankScore(e));
       const el=card({
         ico:medal(i),
-        nm:(mine?'⭐ ':'')+e.name+(e.guest?' <span style="opacity:.6;font-size:10px">(게스트)</span>':''),
-        sub:'⚔️ DPS '+fmt(e.dps||0)+' · 💀 환생 '+(e.prestiges||0),
-        lvl:'💰 최대 보유 '+fmt(e.gold||0),
-        cost:'스테이지 '+(e.stage||1), costCls:mine?'ok':'',
+        nm:(isMe?'⭐ ':'')+e.name+
+           (e.rival?' <span style="opacity:.6;font-size:10px">(라이벌)</span>':
+            (e.guest?' <span style="opacity:.6;font-size:10px">(게스트)</span>':'')),
+        sub:'<span style="color:'+et.col+'">'+et.ico+' '+et.nm+'</span> · 🗼 St.'+(e.stage||1)+' · 💀 '+(e.prestiges||0),
+        lvl:'⚔️ DPS '+fmt(e.dps||0)+' · 💰 '+fmt(e.gold||0),
+        cost:cat.lab(e), costCls:isMe?'ok':'',
         onclick:()=>{}
       });
-      if(mine)el.style.outline='1px solid var(--gem)';
+      if(isMe)el.style.outline='1px solid var(--gem)';
       list.appendChild(el);
     });
+
     const info=document.createElement('div');
     info.style.cssText='font-size:11px;color:var(--dim);text-align:center;padding:8px;line-height:1.7';
-    const mr=myRank();
-    info.innerHTML='🏆 <b>랭킹</b> · 내 순위 <b style="color:var(--gem)">'+(mr?mr+'위':'-')+'</b> / '+arr.length+'명<br>'+
-      '· 최고 스테이지 → 환생 횟수 → DPS 순으로 정렬됩니다<br>'+
-      '· 기록은 이 브라우저의 모든 계정끼리 비교됩니다';
+    const mr=myRank(rankCat);
+    info.innerHTML='🏆 <b>'+cat.nm+'</b> 부문 · 내 순위 <b style="color:var(--gem)">'+(mr?mr+'위':'-')+'</b> / '+arr.length+'명<br>'+
+      '· <b>RP</b> = 스테이지 + 환생 + DPS·골드·처치(로그 환산) 합산 점수<br>'+
+      '· RP가 쌓이면 '+TIERS.map(t=>t.ico).join('→')+' 순으로 티어가 올라갑니다<br>'+
+      '· 이 브라우저의 계정들과 고정 라이벌이 함께 집계됩니다';
     list.appendChild(info);
   }else{ // ach — 도전과제
     ACHIEVEMENTS.forEach(a=>{
@@ -2138,33 +2170,95 @@ function showEnding(){
 }
 
 // ── 랭킹(로컬) ──
-// 서버가 없기 때문에 이 브라우저의 계정들끼리 경쟁하는 기록판이다.
+// 서버가 없으므로 이 브라우저의 계정 + 고정 라이벌(NPC) 기록과 겨루는 기록판이다.
+// v2: 단일 점수(RP) + 티어 승급 + 부문별 순위로 개편.
+const RANK_KEY_V1='idleDungeonRanks_v1';
+
+// 티어: 누적 RP 구간으로 결정된다.
+const TIERS=[
+  {nm:'브론즈',   ico:'🪨', at:0,     col:'#a97142'},
+  {nm:'실버',     ico:'🥈', at:400,   col:'#b8c0d0'},
+  {nm:'골드',     ico:'🥇', at:1200,  col:'#ffd05a'},
+  {nm:'플래티넘', ico:'💠', at:2500,  col:'#67e8f9'},
+  {nm:'다이아',   ico:'💎', at:4500,  col:'#7dd3fc'},
+  {nm:'마스터',   ico:'👑', at:7500,  col:'#c084fc'},
+  {nm:'챌린저',   ico:'🔥', at:12000, col:'#fb7185'}
+];
+function tierOf(rp){ let t=TIERS[0]; for(const x of TIERS) if(rp>=x.at) t=x; return t; }
+function nextTier(rp){ for(const x of TIERS) if(rp<x.at) return x; return null; }
+
+// 부문: 종합은 RP, 나머지는 단일 지표
+const RANK_CATS=[
+  {id:'rp',   nm:'🏆 종합',   val:e=>rankScore(e),        lab:e=>fmt(Math.round(rankScore(e)))+' RP'},
+  {id:'stage',nm:'🗼 스테이지',val:e=>e.stage||1,          lab:e=>'St.'+(e.stage||1)},
+  {id:'dps',  nm:'⚔️ DPS',    val:e=>e.dps||0,            lab:e=>fmt(e.dps||0)+' DPS'},
+  {id:'pres', nm:'💀 환생',    val:e=>e.prestiges||0,      lab:e=>(e.prestiges||0)+'회'}
+];
+let rankCat='rp';
+
+// 고정 라이벌 — 보드가 비어 보이지 않게, 그리고 승급 목표가 되도록 티어별로 배치한다.
+const RIVALS=[
+  {name:'초심자 티모',   stage:14,  prestiges:0,  dps:4.2e2,  gold:9e3},
+  {name:'수련생 하나',   stage:38,  prestiges:2,  dps:8.5e3,  gold:4e5},
+  {name:'모험가 준',     stage:76,  prestiges:6,  dps:2.1e5,  gold:9e6},
+  {name:'정예 세라',     stage:140, prestiges:14, dps:7.4e6,  gold:3e8},
+  {name:'수호자 라온',   stage:230, prestiges:27, dps:3.3e8,  gold:1.2e10},
+  {name:'심연의 카일',   stage:360, prestiges:45, dps:9.6e10, gold:5e12},
+  {name:'무한의 오메가', stage:560, prestiges:80, dps:4.1e14, gold:2e16}
+];
+
 function loadRanks(){
-  try{ const d=JSON.parse(localStorage.getItem(RANK_KEY)||'{}'); return (d&&typeof d==='object')?d:{}; }
-  catch(e){ return {}; }
+  try{ const d=JSON.parse(localStorage.getItem(RANK_KEY)||'null'); if(d&&typeof d==='object')return d; }catch(e){}
+  // v1 기록이 있으면 그대로 물려받는다
+  try{ const o=JSON.parse(localStorage.getItem(RANK_KEY_V1)||'{}'); if(o&&typeof o==='object')return o; }catch(e){}
+  return {};
 }
 function saveRanks(r){ try{localStorage.setItem(RANK_KEY,JSON.stringify(r));}catch(e){} }
-function rankName(){ return curUser||'ダ게스트'; }
-function rankScore(e){ return (e.stage||0)*1e6 + (e.prestiges||0)*1e3 + Math.min(999,Math.log10((e.dps||0)+1)*40); }
+function rankName(){ return curUser||'게스트'; }
+
+// RP: 한쪽 지표만 밀어도 최고가 되지 않도록 로그 스케일로 합산한다.
+function rankScore(e){
+  const st=Math.max(1,e.stage||1), pr=e.prestiges||0;
+  return st*10
+       + pr*250
+       + Math.log10((e.dps||0)+1)*120
+       + Math.log10((e.gold||0)+1)*25
+       + Math.log10((e.kills||0)+1)*30;
+}
+function rankEntries(){
+  const r=loadRanks(), arr=[];
+  for(const k in r){ const e=Object.assign({},r[k]); e.name=e.name||k; arr.push(e); }
+  const have={}; arr.forEach(e=>have[e.name]=1);
+  RIVALS.forEach(b=>{ if(!have[b.name]) arr.push(Object.assign({rival:true},b)); });
+  return arr;
+}
+function rankList(cat){
+  const c=RANK_CATS.find(x=>x.id===(cat||rankCat))||RANK_CATS[0];
+  return rankEntries().sort((a,b)=>c.val(b)-c.val(a)||rankScore(b)-rankScore(a));
+}
+function myEntry(){ const nm=rankName(); return rankEntries().find(e=>e.name===nm)||null; }
+function myRank(cat){
+  const arr=rankList(cat), nm=rankName();
+  for(let i=0;i<arr.length;i++) if(arr[i].name===nm) return i+1;
+  return 0;
+}
 function submitScore(){
   if(!gameReady)return;
   const r=loadRanks(), nm=rankName(), prev=r[nm]||{};
-  const cur={name:nm, guest:!curUser, stage:Math.max(S.maxStage||1,prev.stage||0),
+  const cur={name:nm, guest:!curUser,
+             stage:Math.max(S.maxStage||1,prev.stage||0),
              prestiges:Math.max(S.prestiges||0,prev.prestiges||0),
              dps:Math.max(Math.round(totalDps()),prev.dps||0),
-             gold:Math.max(Math.round(S.gold||0),prev.gold||0), at:Date.now()};
+             gold:Math.max(Math.round(S.gold||0),prev.gold||0),
+             kills:Math.max(Math.round(S.totalKills||0),prev.kills||0),
+             at:Date.now()};
+  const before=tierOf(rankScore(prev)), after=tierOf(rankScore(cur));
+  cur.rp=Math.round(rankScore(cur));
+  cur.bestTier=Math.max(prev.bestTier||0,TIERS.indexOf(after));
   r[nm]=cur; saveRanks(r);
-}
-function rankList(){
-  const r=loadRanks(), arr=[];
-  for(const k in r){ const e=r[k]||{}; e.name=e.name||k; arr.push(e); }
-  arr.sort((a,b)=>rankScore(b)-rankScore(a));
-  return arr;
-}
-function myRank(){
-  const arr=rankList(), nm=rankName();
-  for(let i=0;i<arr.length;i++) if(arr[i].name===nm) return i+1;
-  return 0;
+  // 티어가 올라가면 한 번만 알려준다
+  if(prev.stage!==undefined && TIERS.indexOf(after)>TIERS.indexOf(before))
+    floatNum(after.ico+' '+after.nm+' 승급!',true,after.col);
 }
 
 // ── 저장 / 불러오기 ──
