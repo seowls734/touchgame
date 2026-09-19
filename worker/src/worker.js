@@ -1,22 +1,12 @@
 // 터치게임 온라인 랭킹 서버 (Cloudflare Workers + D1)
 //
-// 설계 원칙: 클라이언트가 보낸 점수를 그대로 믿지 않는다.
-//  - RP(순위 점수)는 서버가 직접 계산한다. 클라이언트가 보낸 rp는 아예 받지 않는다.
-//  - 게임 규칙상 불가능한 조합은 거부한다(index.html 의 rankFlags 와 같은 기준).
+// 기록 검증(이상치 필터)은 두지 않는다 — 보내온 수치를 그대로 기록한다.
+//  - RP(순위 점수)만 서버가 계산한다. 정렬 기준을 한 곳에서 유지하기 위해서다.
 //  - 기록은 (id, secret) 쌍으로만 수정할 수 있어, 남의 기록을 덮어쓸 수 없다.
+//  - 값의 타입/범위 정리와 이름 정제는 DB가 깨지지 않게 하기 위한 최소한의 처리다.
 
 const BOARD_MAX = 200;      // 한 번에 내려줄 수 있는 최대 인원
 const MIN_INTERVAL = 30000; // 같은 기록의 갱신 최소 간격(ms)
-const FINAL_STAGE = 500;    // 게임의 최종 스테이지
-const DPS_LEAD = 25;        // 최고 스테이지보다 이만큼 앞선 보스를 즉사시키면 비정상
-
-// ── 게임 공식 (index.html 과 동일해야 한다) ──
-
-function mobMaxHp(stage, boss) {
-  let hp = 10 * Math.pow(1.55, stage - 1);
-  if (boss) hp *= 10;
-  return hp;
-}
 
 // 순위 점수. 한쪽 지표만 밀어도 최고가 되지 않도록 로그 스케일로 합산한다.
 function rankScore(e) {
@@ -25,18 +15,6 @@ function rankScore(e) {
        + Math.log10(e.dps + 1) * 120
        + Math.log10(e.gold + 1) * 25
        + Math.log10(e.kills + 1) * 30;
-}
-
-// 게임 규칙상 불가능한 조합을 걸러낸다.
-function checkRecord(e) {
-  const st = e.stage, pr = e.prestiges;
-  if (st > FINAL_STAGE) return '최종 스테이지를 넘음';
-  if (pr > 200) return '환생 횟수가 비정상';
-  if (e.kills < st - 1) return '처치 수가 스테이지보다 적음';
-  if (pr > 0 && st < 12 + 4 * (pr - 1)) return '환생 횟수에 필요한 스테이지에 못 미침';
-  if (e.dps > mobMaxHp(Math.min(FINAL_STAGE, st + DPS_LEAD), true)) return 'DPS가 최고 스테이지와 맞지 않음';
-  if (e.gold > 6 * Math.pow(1.24, st - 1) * 35 * 1e12) return '보유 골드가 스테이지 대비 과도함';
-  return null;
 }
 
 // ── 입력 정리 ──
@@ -136,9 +114,6 @@ export default {
       if (Object.values(rec).some(Number.isNaN)) return json({ error: '잘못된 수치' }, 400);
       rec.stage = Math.max(1, rec.stage);
 
-      const bad = checkRecord(rec);
-      if (bad) return json({ error: bad }, 422);
-
       const now = Date.now();
       const hash = await sha256(secret);
 
@@ -152,7 +127,7 @@ export default {
         if (now - prev.at < MIN_INTERVAL) return json({ error: '너무 잦은 갱신' }, 429);
       }
 
-      // 점수는 서버가 계산한다 — 클라이언트가 보낸 rp는 쓰지 않는다
+      // 정렬 기준을 한 곳에 두기 위해 점수만 서버에서 계산한다
       const rp = Math.round(rankScore(rec));
 
       await env.DB.prepare(

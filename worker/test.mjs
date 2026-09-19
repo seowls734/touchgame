@@ -44,13 +44,13 @@ async function t(label, res, want) {
 // 정상 기록
 await t('정상 기록 등록', await post({ id: ID, secret: SEC, name: '테스터', stage: 40, prestiges: 2, dps: 5e3, gold: 2e5, kills: 900 }), 200);
 
-// 이상치 — 각각 거부돼야 한다
-await t('스테이지 초과',   await post({ id: 'd'.repeat(16), secret: SEC, name: '치터A', stage: 9999, prestiges: 0, dps: 1, gold: 0, kills: 99999 }), 422);
-await t('처치 수 부족',    await post({ id: 'e'.repeat(16), secret: SEC, name: '치터B', stage: 300, prestiges: 0, dps: 1, gold: 0, kills: 5 }), 422);
-await t('환생 조건 미달',  await post({ id: 'f'.repeat(16), secret: SEC, name: '치터C', stage: 10, prestiges: 50, dps: 1, gold: 0, kills: 500 }), 422);
-await t('DPS 과다',        await post({ id: '1'.repeat(16), secret: SEC, name: '치터D', stage: 20, prestiges: 0, dps: 1e30, gold: 0, kills: 500 }), 422);
-await t('골드 과다',       await post({ id: '2'.repeat(16), secret: SEC, name: '치터E', stage: 20, prestiges: 0, dps: 1, gold: 1e300, kills: 500 }), 422);
-await t('음수 값',         await post({ id: '3'.repeat(16), secret: SEC, name: '치터F', stage: -5, prestiges: 0, dps: 1, gold: 0, kills: 500 }), 400);
+// 이상치 검사는 없앴다 — 규칙상 불가능한 값이라도 그대로 받는다
+await t('극단적인 기록도 수용', await post({ id: 'd'.repeat(16), secret: SEC, name: '초고수', stage: 500, prestiges: 120, dps: 1e30, gold: 1e40, kills: 9999 }), 200);
+await t('앞뒤 안 맞는 기록도 수용', await post({ id: 'e'.repeat(16), secret: SEC, name: '이상한기록', stage: 300, prestiges: 99, dps: 1, gold: 0, kills: 5 }), 200);
+
+// 형식이 깨진 입력만 거부한다(DB 보호)
+await t('음수 값',         await post({ id: '3'.repeat(16), secret: SEC, name: '오류A', stage: -5, prestiges: 0, dps: 1, gold: 0, kills: 500 }), 400);
+await t('숫자가 아닌 값',  await post({ id: '5'.repeat(16), secret: SEC, name: '오류B', stage: 'abc', prestiges: 0, dps: 1, gold: 0, kills: 500 }), 400);
 await t('이름 너무 짧음',  await post({ id: '4'.repeat(16), secret: SEC, name: 'x', stage: 20, prestiges: 0, dps: 1, gold: 0, kills: 500 }), 400);
 await t('식별자 형식 오류', await post({ id: 'ZZZ', secret: SEC, name: '테스터', stage: 20, prestiges: 0, dps: 1, gold: 0, kills: 500 }), 400);
 

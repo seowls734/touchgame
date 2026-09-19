@@ -2094,36 +2094,14 @@ function renderShop(){
       list.appendChild(el);
     });
 
-    // ⑤ 이상치로 걸러진 기록 — 순위에는 넣지 않고 사유와 함께 보여준다
-    const bad=rankFlagged();
-    if(bad.length){
-      const t=document.createElement('div');
-      t.style.cssText='font-size:11px;color:var(--dim);padding:10px 4px 4px';
-      t.innerHTML='⚠️ <b>검증되지 않은 기록</b> — 게임 규칙상 불가능한 값이라 순위에서 제외했습니다';
-      list.appendChild(t);
-      bad.forEach(e=>{
-        const el=card({
-          ico:'⚠️',
-          nm:(e.name===me?'⭐ ':'')+esc(e.name),
-          sub:esc(rankFlags(e).join(' · ')),
-          lvl:'🗼 St.'+(e.stage||1)+' · 💀 '+(e.prestiges||0)+' · ⚔️ '+fmt(e.dps||0),
-          cost:'제외', costCls:'no',
-          onclick:()=>{}
-        });
-        el.style.opacity='.55';
-        list.appendChild(el);
-      });
-    }
-
     const info=document.createElement('div');
     info.style.cssText='font-size:11px;color:var(--dim);text-align:center;padding:8px;line-height:1.7';
     const mr=myRank(rankCat);
     info.innerHTML='🏆 <b>'+cat.nm+'</b> 부문 · 내 순위 <b style="color:var(--gem)">'+(mr?mr+'위':'-')+'</b> / '+arr.length+'명<br>'+
       '· <b>RP</b> = 스테이지 + 환생 + DPS·골드·처치(로그 환산) 합산 점수<br>'+
       '· RP가 쌓이면 '+TIERS.map(t=>t.ico).join('→')+' 순으로 티어가 올라갑니다<br>'+
-      (net.on?'· 🌐 표시는 다른 기기에서 올라온 기록입니다<br>'
-            :'· 이 브라우저의 계정 기록만 집계됩니다<br>')+
-      '· 규칙상 불가능한 기록은 자동으로 순위에서 빠집니다';
+      (net.on?'· 🌐 표시는 다른 기기에서 올라온 기록입니다'
+            :'· 이 브라우저의 계정 기록만 집계됩니다');
     list.appendChild(info);
   }else{ // ach — 도전과제
     ACHIEVEMENTS.forEach(a=>{
@@ -2288,30 +2266,6 @@ function rankScore(e){
 // 이름 등 바깥에서 들어온 문자열은 innerHTML에 넣기 전에 반드시 이스케이프한다
 function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
-// ── 이상치 필터 ──
-// 서버 검증이 없으므로, 게임 규칙상 불가능한 조합만 걸러낸다.
-// 목표는 "완벽한 치트 차단"이 아니라 순위표가 말이 되게 유지하는 것.
-const SANITY_DPS_LEAD=25;   // 현재 스테이지보다 이만큼 앞선 보스를 즉사시킬 정도면 비정상
-function rankFlags(e){
-  const f=[], st=Math.max(1,e.stage||1), pr=e.prestiges||0;
-  // ① DPS: 최고 스테이지에 비해 터무니없이 높다
-  if((e.dps||0) > mobMaxHp(Math.min(FINAL_STAGE,st+SANITY_DPS_LEAD),true))
-    f.push('DPS가 최고 스테이지와 맞지 않음');
-  // ② 환생: 환생 N회는 스테이지 12+4(N-1) 도달이 전제
-  if(pr>0 && st < 12+4*(pr-1))
-    f.push('환생 횟수에 필요한 스테이지에 못 미침');
-  // ③ 처치 수: 스테이지를 올리려면 최소한 그만큼은 잡아야 한다
-  if((e.kills||0) < st-1)
-    f.push('처치 수가 스테이지보다 적음');
-  // ④ 골드: 그 스테이지에서 나올 수 있는 양을 한참 넘음(1e6배 여유)
-  if((e.gold||0) > 6*Math.pow(1.24,st-1)*35*1e12)
-    f.push('보유 골드가 스테이지 대비 과도함');
-  // ⑤ 스테이지 상한
-  if(st>FINAL_STAGE) f.push('최종 스테이지를 넘음');
-  return f;
-}
-function rankValid(e){ return rankFlags(e).length===0; }
-
 function rankEntries(){
   const r=loadRanks(), arr=[];
   for(const k in r){ const e=Object.assign({},r[k]); e.name=e.name||k; arr.push(e); }
@@ -2321,10 +2275,8 @@ function rankEntries(){
 }
 function rankList(cat){
   const c=RANK_CATS.find(x=>x.id===(cat||rankCat))||RANK_CATS[0];
-  // 이상치는 순위에서 제외한다(따로 모아 보여준다)
-  return rankEntries().filter(rankValid).sort((a,b)=>c.val(b)-c.val(a)||rankScore(b)-rankScore(a));
+  return rankEntries().sort((a,b)=>c.val(b)-c.val(a)||rankScore(b)-rankScore(a));
 }
-function rankFlagged(){ return rankEntries().filter(e=>!rankValid(e)).sort((a,b)=>rankScore(b)-rankScore(a)); }
 function myEntry(){ const nm=rankName(); return rankEntries().find(e=>e.name===nm)||null; }
 function myRank(cat){
   const arr=rankList(cat), nm=rankName();
@@ -2414,8 +2366,6 @@ async function netPull(){
 
 async function netSubmit(cur){
   if(!API_URL||!net.id)return;
-  // 서버가 어차피 거부할 기록은 보내지 않는다
-  if(!rankValid(cur))return;
   const now=Date.now();
   if(cur.rp<=net.lastRp)return;                // 기록이 나아졌을 때만
   if(now-net.lastPush<NET_PUSH_MS)return;      // 요청 수를 아낀다
